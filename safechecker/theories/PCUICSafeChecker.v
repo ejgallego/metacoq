@@ -1103,32 +1103,20 @@ Section Typecheck.
     change (eqb ind I = true) in H0.
     destruct (eqb_spec ind I) as [e|e]; [destruct e|discriminate].
     change (eqb (ind_npars d) par = true) in H1.
-    destruct (eqb_spec (ind_npars d) par) as [e|e]; [|discriminate]; subst.
-    eapply WfArity_build_case_predicate_type; tea.
-    2: symmetry; eassumption.
-    simpl in *. apply validity_term in t0; tea.
-    eapply isWfArity_or_Type_red in t0; tea.
-    destruct t0; [|assumption].
-    destruct i as [ctx [s [HH1 _]]]. cbn in HH1.
-    rewrite destArity_mkApps_Ind in HH1; discriminate.
-  Qed.
-  Next Obligation.
-    inversion HH; sq; right; assumption.
-  Qed.
-  Next Obligation.
-    inversion HH; assumption.
-  Qed.
-  Next Obligation.
-    rename Heq_anonymous into HH3.
-    clear Heq_anonymous2. destruct HΣ, HΓ, X.
-    change (eqb ind ind' = true) in H0.
-    destruct (eqb_spec ind ind') as [e|e]; [destruct e|discriminate].
-    change (eqb (ind_npars decl) par = true) in H1.
-    destruct (eqb_spec (ind_npars decl) par) as [e|e]; [|discriminate].
-    symmetry in HH3.
-    eapply (type_Case_valid_btys Σ Γ) in HH3; tea.
+    destruct (eqb_spec (ind_npars d) par) as [e|e]; [|discriminate].
+    rename Heq_anonymous into HH. symmetry in HH.
+    destruct X9. destruct X8.
+    eapply (type_Case_valid_btys Σ Γ) in HH; tea.
     eapply All_Forall, All_impl; tea. clear.
-    intros x XX; constructor; exists ps; exact XX.
+    intros x X; constructor; now exists ps.
+    eapply type_Cumul. eapply X4.
+    right.
+    unshelve epose (validity _ _ _ _ _ _ X4). eauto using typing_wf_local.
+    destruct p0.
+    eapply isWfArity_or_Type_red in i. 3:eapply X8. all:eauto.
+    destruct i. red in i. destruct i as [ctx [s' [eq ?]]].
+    rewrite destArity_tInd in eq. discriminate. apply i.
+    eapply red_cumul. apply X8.
   Defined.
   Next Obligation.
     rename Heq_anonymous2 into XX2. destruct wildcard'.

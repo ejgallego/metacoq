@@ -502,6 +502,15 @@ Proof.
   reflexivity.
 Qed.
 
+Lemma destArity_tInd {t u l} :
+  destArity [] (mkApps (tInd t u) l) = None.
+Proof.
+  induction l. reflexivity.
+  rewrite mkApps_nonempty.
+  intros e; discriminate e.
+  reflexivity.
+Qed.
+
 
 Reserved Notation " Σ ;;; Γ |- t : T " (at level 50, Γ, t, T at next level).
 Reserved Notation " Σ ;;; Γ |- t <= u " (at level 50, Γ, t, u at next level).
@@ -1423,7 +1432,6 @@ Proof.
              exists u. intuition eauto. unshelve eapply X14. all: eauto. lia.
 Qed.
 Print Assumptions typing_ind_env.
-
 
 Ltac my_rename_hyp h th :=
   match th with

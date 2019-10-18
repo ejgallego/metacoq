@@ -11,6 +11,8 @@ Require Import ssreflect.
 From Equations Require Import Equations.
 Require Import Equations.Prop.DepElim.
 
+Derive Signature for Peano.le.
+
 (** * Lifting and substitution for the AST
 
   Along with standard commutation lemmas.
@@ -999,8 +1001,6 @@ Proof.
     now rewrite (proj2 (nth_error_None l #|l|)).
     simpl. now apply IHl.
 Qed.
-
-Derive Signature for Peano.le.
 
 Lemma subst_consn_lt {A} {l : list A} {i} :
   i < #|l| ->

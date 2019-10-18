@@ -23,6 +23,7 @@ Module TTy := Checker.Typing.
 Local Existing Instance default_checker_flags.
 
 Module TL := Template.LiftSubst.
+Derive Signature for All.
 
 Lemma mkApps_morphism (f : term -> term) u v :
   (forall x y, f (tApp x y) = tApp (f x) (f y)) ->
