@@ -1753,6 +1753,72 @@ Inductive decl_typing {cf : checker_flags} Σ Γ : context -> list universe -> T
 Definition max_list (u : list universe) v : universe :=
   List.fold_left (fun u v => Universe.sort_of_product v u) u v.
 
+
+Require Import Morphisms.
+Section UniverseLemmas.
+  Context {cf:checker_flags}.
+
+  Lemma NEL_forallb_app {A:Set} (P : A -> bool) l l' :
+    NEL.forallb P (NEL.app l l') =
+    NEL.forallb P l && NEL.forallb P l'.
+  Proof.
+    induction l. reflexivity.
+    cbn. rewrite IHl. apply andb_assoc.
+  Qed.
+
+  Lemma is_prop_sup u s :
+    Universe.is_prop (Universe.sup u s)
+    = Universe.is_prop u && Universe.is_prop s.
+  Proof.
+    apply NEL_forallb_app.
+  Qed.
+
+  Ltac unfold_eq_universe
+    := unfold eq_universe in *; destruct check_univs; [intros v Hv|trivial].
+
+  Lemma sort_of_product_idem φ s
+    : eq_universe φ (Universe.sort_of_product s s) s.
+  Proof.
+    unfold Universe.sort_of_product. destruct (Universe.is_prop s).
+    reflexivity.
+    unfold_eq_universe. rewrite val_sup; lia.
+  Qed.
+
+  Lemma eq_universe_sup_assoc φ s1 s2 s3 :
+    eq_universe φ (Universe.sup s1 (Universe.sup s2 s3))
+                  (Universe.sup (Universe.sup s1 s2) s3).
+  Proof.
+    unfold_eq_universe. rewrite !val_sup; lia.
+  Qed.
+
+  Lemma eq_universe_sup_idem φ s :
+    eq_universe φ (Universe.sup s s) s.
+  Proof.
+    unfold_eq_universe. rewrite !val_sup; lia.
+  Qed.
+
+  Instance sup_eq_universe φ :
+    Proper (eq_universe φ ==> eq_universe φ ==> eq_universe φ) Universe.sup.
+  Proof.
+    intros s1 s1' H1 s2 s2' H2.
+    unfold_eq_universe. specialize (H1 v Hv). specialize (H2 v Hv).
+    rewrite !val_sup; lia.
+  Qed.
+
+  Lemma sort_of_product_twice φ u s :
+    eq_universe φ (Universe.sort_of_product u (Universe.sort_of_product u s))
+                (Universe.sort_of_product u s).
+  Proof.
+    unfold Universe.sort_of_product. case_eq (Universe.is_prop s).
+    intros ->. reflexivity.
+    intro e. rewrite is_prop_sup e andb_false_r.
+    rewrite eq_universe_sup_assoc.
+    rewrite eq_universe_sup_idem.
+    reflexivity.
+  Qed.
+
+End UniverseLemmas.
+
 Lemma type_it_mkProd_or_LetIn {cf:checker_flags} Σ Γ Γ' u t s : 
   wf Σ.1 ->
   type_local_ctx (lift_typing typing) Σ Γ Γ' u ->
@@ -1772,20 +1838,20 @@ Proof.
     eapply IHΓ'; auto.
     destruct a as [na [b|] ty]; intuition auto.
     destruct a as [na [b|] ty]; intuition auto.
-    eapply (type_mkProd_or_LetIn _ _ {| decl_body := Some b |}); auto. simpl.
-    (* We must sure in wf that types of let-ins are not algebraic!*)
-    todo "wf let"%string.
-    cbn. eapply type_Cumul; eauto.
-    left. eexists [], _; intuition eauto using typing_wf_local.
-    constructor. constructor. eapply leq_universe_product.
+    { apply typing_wf_local in Ht as XX. inversion XX; subst.
+      eapply (type_mkProd_or_LetIn _ _ {| decl_body := Some b |}); auto.
+      + simpl. exact X0.π2.
+      + eapply type_Cumul; eauto.
+        left. eexists [], _. intuition eauto.
+        constructor. constructor. eapply leq_universe_product. }
     eapply (type_mkProd_or_LetIn _ _ {| decl_body := None |}) => /=; eauto.
     left. eexists [], _; intuition eauto using typing_wf_local.
     eapply typing_wf_local in Ht.
     depelim Ht; eapply All_local_env_app in Ht; intuition auto.
     constructor. constructor.
-    (* Universe property: @Simon *)
-    admit.
-Admitted.
+    apply eq_universe_leq_universe.
+    apply sort_of_product_twice.
+Qed.
 
 Lemma weakening_gen : forall (cf : checker_flags) (Σ : global_env × universes_decl)
   (Γ Γ' : context) (t T : term) n, n = #|Γ'| ->
@@ -2535,7 +2601,8 @@ Proof.
   eapply type_Cumul with (tSort (Universe.sort_of_product ps ps)).
   eapply type_it_mkProd_or_LetIn; eauto.
   3:{ left. exists [], ps; intuition eauto using typing_wf_local. }
-  3:{ todo "universes: @Simon". }
+  3:{ repeat constructor. apply eq_universe_leq_universe.
+      apply sort_of_product_idem. }
   red in oc'.
   destruct oc.
   todo "the context of arguments should be typeable with ps (from Simon's PR)"%string.
