@@ -1487,65 +1487,8 @@ Section Lemmata.
     (* pose proof (typing_alpha _ _ _ _ hvC e') as huC. *)
     (* Not clear.*)
   Abort.
-
-  Lemma welltyped_zipc_replace :
-    forall Γ u v π,
-      welltyped Σ Γ (zipc v π) ->
-      welltyped Σ (Γ ,,, stack_context π) u ->
-      Σ ;;; Γ ,,, stack_context π |- u == v ->
-      welltyped Σ Γ (zipc u π).
-  Proof.
-    destruct hΣ as [wΣ].
-    intros Γ u v π hv hu heq.
-    induction π in u, v, hu, hv, heq |- *.
-    - simpl in *. assumption.
-    - simpl in *. eapply IHπ.
-      + eassumption.
-      + zip fold in hv. apply welltyped_context in hv.
-        simpl in hv.
-        destruct hv as [Tv hv].
-        destruct hu as [Tu hu].
-        apply inversion_App in hv as ihv ; auto.
-        destruct ihv as [na [A' [B' [hv' [ht ?]]]]].
-        (* Seems to be derivable (tediously) from some principal type lemma. *)
-        admit.
-      + (* Congruence *)
-        admit.
-  Admitted.
-
-  Lemma wellformed_zipc_replace :
-    forall Γ u v π,
-      wellformed Σ Γ (zipc v π) ->
-      wellformed Σ (Γ ,,, stack_context π) u ->
-      Σ ;;; Γ ,,, stack_context π |- u == v ->
-      wellformed Σ Γ (zipc u π).
-  Admitted.
-
+  
   Derive Signature for typing.
-
-  (* Follows from principality, inversion of cumul/confluence *)
-  Lemma Construct_Ind_ind_eq :
-    forall {Γ n i args u i' args' u'},
-      Σ ;;; Γ |- mkApps (tConstruct i n u) args : mkApps (tInd i' u') args' ->
-      i = i'.
-  Proof.
-    destruct hΣ as [wΣ].
-    intros Γ n i args u i' args' u' h.
-    eapply inversion_mkApps in h ; auto.
-    destruct h as [T [U [hC [hs hc]]]].
-    apply inversion_Construct in hC
-      as [mdecl [idecl [cdecl [hΓ [isdecl [const htc]]]]]]. 2: assumption.
-    unfold type_of_constructor in htc. simpl in htc.
-    destruct i as [mind nind]. simpl in *.
-    destruct cdecl as [[cna ct] cn]. cbn in htc.
-    destruct mdecl as [mnpars mpars mbod muni]. simpl in *.
-    destruct idecl as [ina ity ike ict iprj]. simpl in *.
-    unfold declared_constructor in isdecl. cbn in isdecl.
-    destruct isdecl as [[dm hin] hn]. simpl in *.
-    unfold declared_minductive in dm.
-    (* Do we need to exploit wellformedness of the context?? *)
-    (* We should also use invert_cumul_ind_l at some point. *)
-  Admitted.
 
   Lemma Proj_red_cond :
     forall Γ i pars narg i' c u l,
@@ -1720,13 +1663,10 @@ Require Import ssreflect.
 Lemma type_mkProd_or_LetIn {cf:checker_flags} Σ Γ d u t s : 
   wf Σ.1 ->
   Σ ;;; Γ |- decl_type d : tSort u ->
+  Σ ;;; Γ ,, d |- t : tSort s ->
   match decl_body d return Type with 
-  | Some b => 
-   Σ ;;; Γ ,, d |- t : tSort s ->
-   Σ ;;; Γ |- mkProd_or_LetIn d t : tSort s
-  | None =>
-    Σ ;;; Γ ,, d |- t : tSort s ->
-    Σ ;;; Γ |- mkProd_or_LetIn d t : tSort (Universe.sort_of_product u s)
+  | Some b => Σ ;;; Γ |- mkProd_or_LetIn d t : tSort s
+  | None => Σ ;;; Γ |- mkProd_or_LetIn d t : tSort (Universe.sort_of_product u s)
   end.
 Proof.
   intros wfΣ. destruct d as [na [b|] dty] => [Hd Ht|Hd Ht]; rewrite /mkProd_or_LetIn /=.
@@ -2449,20 +2389,27 @@ induction Δ; intros.
   auto.
 Qed.
 
+Lemma isWAT_wf_local {cf:checker_flags} {Σ Γ T} : isWfArity_or_Type Σ Γ T -> wf_local Σ Γ.
+Proof.
+  move=> [[ctx [s [_ Hs]]]|[s Hs]]. 
+  - eapply All_local_env_app in Hs.
+    intuition eauto with pcuic.
+  - now eapply typing_wf_local.
+Qed.  
+
 (** This lemmma is complicated by the fact that `args` might be an instance
     of arguments for a convertible arity of `ind`.
     Actually #|args| must be exactly of the length of the number of parameters
     + indices (lets excluded). *)
-Lemma inversion_Ind_app {cf:checker_flags} Σ Γ ind u c args :
+Lemma inversion_WAT_indapp {cf:checker_flags} Σ Γ ind u args :
     forall mdecl idecl (isdecl : declared_inductive Σ.1 mdecl ind idecl),
     wf Σ.1 ->
-    Σ ;;; Γ |- c : mkApps (tInd ind u) args ->
+    isWfArity_or_Type Σ Γ (mkApps (tInd ind u) args) ->
     mdecl.(ind_npars) <= #|args| /\ inductive_ind ind < #|ind_bodies mdecl|.
 Proof.
   intros mdecl idecl decli wfΣ cty.
-  pose proof (typing_wf_local cty).
-  apply validity in cty as [_ cty]; auto with wf.
-  destruct cty.
+  pose proof (isWAT_wf_local cty).
+  destruct cty as [i|i].
   - red in i. destruct i as [ctx [s [da wfext]]].
     now rewrite destArity_tInd in da.
   - destruct i as [s Hs].
@@ -2477,12 +2424,12 @@ Proof.
     assert (declared_inductive Σ.1 mdecl ind idecl).
     split; auto.
     apply on_declared_inductive in H1 as [onmind onind]; auto.
-    rewrite (ind_arity_eq onind) in c0; auto.
-    rewrite !subst_instance_constr_it_mkProd_or_LetIn in c0.
-    simpl in c0.
-    eapply invert_cumul_arity_l in c0; auto.
-    rewrite !destArity_it_mkProd_or_LetIn in c0.
-    destruct c0 as [T'0 [ctx' [s' [[[redT' destT'] convctx]leq]]]].
+    rewrite (ind_arity_eq onind) in c; auto.
+    rewrite !subst_instance_constr_it_mkProd_or_LetIn in c.
+    simpl in c.
+    eapply invert_cumul_arity_l in c; auto.
+    rewrite !destArity_it_mkProd_or_LetIn in c.
+    destruct c as [T'0 [ctx' [s' [[[redT' destT'] convctx]leq]]]].
     eapply isWfArity_or_Type_red in validT'. 3:eapply redT'. 2:auto.
     eapply typing_spine_strengthen in Hspine; last first.
     eapply red_cumul_inv, redT'. all:eauto.
@@ -2518,6 +2465,42 @@ Proof.
     auto.
     left. eexists _, _; intuition auto.
 Qed.
+
+Lemma inversion_Ind_app {cf:checker_flags} Σ Γ ind u c args :
+    forall mdecl idecl (isdecl : declared_inductive Σ.1 mdecl ind idecl),
+    wf Σ.1 ->
+    Σ ;;; Γ |- c : mkApps (tInd ind u) args ->
+    mdecl.(ind_npars) <= #|args| /\ inductive_ind ind < #|ind_bodies mdecl|.
+Proof.
+  intros mdecl idecl decli wfΣ cty.
+  pose proof (typing_wf_local cty).
+  apply validity in cty as [_ cty]; auto with wf.
+  now eapply inversion_WAT_indapp.
+Qed.
+  
+(* Follows from principality, inversion of cumul/confluence *)
+Lemma Construct_Ind_ind_eq {cf:checker_flags} {Σ} (wfΣ : wf Σ.1):
+  forall {Γ n i args u i' args' u'},
+  Σ ;;; Γ |- mkApps (tConstruct i n u) args : mkApps (tInd i' u') args' ->
+  i = i'.
+Proof.
+  intros Γ n i args u i' args' u' h.
+  eapply inversion_mkApps in h ; auto.
+  destruct h as [T [U [hC [hs hc]]]].
+  apply inversion_Construct in hC
+    as [mdecl [idecl [cdecl [hΓ [isdecl [const htc]]]]]].
+  unfold type_of_constructor in htc. simpl in htc.
+  destruct i as [mind nind]. simpl in *.
+  destruct cdecl as [[cna ct] cn]. cbn in htc.
+  destruct mdecl as [mnpars mpars mbod muni]. simpl in *.
+  destruct idecl as [ina ity ike ict iprj]. simpl in *.
+  unfold declared_constructor in isdecl. cbn in isdecl.
+  destruct isdecl as [[dm hin] hn]. simpl in *.
+  unfold declared_minductive in dm.
+  
+  (* Do we need to exploit wellformedness of the context?? *)
+  (* We should also use invert_cumul_ind_l at some point. *)
+Admitted.
 
 Lemma subst_inds_concl_head ind u mdecl (arity : context) :
   let head := tRel (#|ind_bodies mdecl| - S (inductive_ind ind) + #|ind_params mdecl| + #|arity|) in
