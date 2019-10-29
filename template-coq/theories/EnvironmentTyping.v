@@ -254,16 +254,15 @@ Module DeclarationTyping (T : Term) (E : EnvironmentSig T)
     Context {cf: checker_flags}.
     Context (P : global_env_ext -> context -> term -> option term -> Type).
 
-    (** For well-formedness of inductive declarations we need a way to check that a assumptions
-        of a given context is typable in a sort [u]. *)
+     (** For well-formedness of inductive declarations we need a way to check that a assumptions
+      of a given context is typable in a sort [u]. We also force typing of the let-ins
+      to imply wf_local *)
     Fixpoint type_local_ctx Σ (Γ Δ : context) (u : universe) : Type :=
       match Δ with
       | [] => True
-      | {| decl_body := None ; decl_type := t |} :: Δ =>
-        (type_local_ctx Σ Γ Δ u * (P Σ (Γ ,,, Δ) t (Some (tSort u))))
-      | {| decl_body := Some _ |} :: Δ =>
-        type_local_ctx Σ Γ Δ u
-      end.
+      | {| decl_body := None; decl_type := t |} :: Δ => (type_local_ctx Σ Γ Δ u * (P Σ (Γ ,,, Δ) t (Some (tSort u))))
+      | {| decl_body := Some b; decl_type := t |} :: Δ => (type_local_ctx Σ Γ Δ u * (P Σ (Γ ,,, Δ) t None * P Σ (Γ ,,, Δ) b (Some t)))
+      end.    
 
     Implicit Types (mdecl : mutual_inductive_body) (idecl : one_inductive_body) (cdecl : ident * term * nat).
 
