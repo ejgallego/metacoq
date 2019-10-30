@@ -25,6 +25,7 @@ Set Equations With UIP.
 Derive Signature for typing_spine.
 
 Set Default Goal Selector "!".
+Require Import ssreflect ssrbool.
 
 
 
@@ -1634,8 +1635,6 @@ Proof.
   now simpl.
 Qed.
 
-Require Import ssreflect.
-
 Lemma type_mkProd_or_LetIn {cf:checker_flags} Σ Γ d u t s : 
   wf Σ.1 ->
   Σ ;;; Γ |- decl_type d : tSort u ->
@@ -3182,14 +3181,6 @@ Proof.
   now rewrite subst_empty app_context_nil_l in X3.
 Qed.
 
-Definition isProd_or_LetIn (t : term) :=
-  match t with
-  | tProd _ _ _ => true
-  | tLetIn _ _ _ _ => true
-  | _ => false
-  end.
-  
-
 Lemma subslet_app_inv' {cf:checker_flags} Σ Γ Δ Δ' s : 
   subslet Σ Γ s (Δ ,,, Δ') ->
   subslet Σ Γ (firstn #|Δ'| s) (subst_context (skipn #|Δ'| s) 0 Δ').
@@ -3311,24 +3302,21 @@ Proof.
   now eapply substitution_it_mkProd_or_LetIn.
 Qed.
 
-Require Import ssrbool.
 Lemma typing_spine_it_mkProd_or_LetIn_close {cf:checker_flags} Σ Γ Δ T args s : 
   wf Σ.1 ->
   make_context_subst (List.rev Δ) args [] = Some s -> 
   #|args| = context_assumptions Δ ->
   subslet Σ Γ s Δ ->
   isWfArity_or_Type Σ Γ (it_mkProd_or_LetIn Δ T) ->
-  ~~ isProd_or_LetIn T ->
   typing_spine Σ Γ (it_mkProd_or_LetIn Δ T) args (subst0 s T).
 Proof.
   intros. 
   pose proof (typing_spine_it_mkProd_or_LetIn_gen Σ Γ Δ [] T args s [] []); auto.
   rewrite app_nil_r subst_empty in X2. apply X2; eauto.
   constructor. 2:eauto.
-
-  admit.
+  eapply isWAT_it_mkProd_or_LetIn_app; eauto.
   now rewrite app_context_nil_l.
-Admitted.
+Qed.
 
 Lemma map_subst_app_simpl l l' k (ts : list term) : 
   map (subst l k ∘ subst l' (k + #|l|)) ts =
@@ -3483,10 +3471,56 @@ Proof.
   eapply on_declared_minductive in H; auto.
   now apply onParams in H.
 Qed.
-  
-      
+
+(* Section Tabulate.
+  Context {A : Type} (f : nat -> A).
+
+  Equations tabulate_aux (n : nat) (acc : list A) : list A :=
+  tabulate_aux 0 acc => f 0 :: acc;
+  tabulate_aux (S n') acc => tabulate_aux n' (f (S n') :: acc).
+    
+  Definition tabulate (n : nat) := tabulate_aux n [].
+End Tabulate.
+ *)
+(* 
+Fixpoint context_subst_inst Γ :=
+  match Γ with
+  | nil => nil
+  | d :: Γ' => 
+     *)
+ (* Definition context_subst_inst Γ := 
+  mapi (fun i d => 
+    match decl_body d with
+    | Some b => lift0 (S i) b
+    | None => tRel i
+    end) Γ.
+
+Lemma context_subst_to_extended_list_k Γ Δ : 
+  same_ctx_shape Γ Δ -> 
+  context_subst Γ (to_extended_list_k Δ 0) (context_subst_inst Δ).
+Proof.
+  intros HΓ.
+  rewrite /to_extended_list_k /context_subst_inst.
+  rewrite reln_alt_eq app_nil_r /mapi.
+  generalize 0 at 1 3.
+  induction Δ in Γ, HΓ |- *; depelim HΓ.
+  simpl. intros. constructor. simpl. intros n.
+  constructor. rewrite Nat.add_1_r. eapply IHΔ; auto.
+  intros.
+  simpl. rewrite Nat.add_1_r. 
+
+  rewrite /context_subst_inst /= /mapi /= /to_extended_list_k /=.
+  si
+ *)
+
 (* Lemma context_subst_instance_context u Γ a s : context_subst (subst_instance_context u Γ) a s -> context_subst Γ a s.
  *)
+
+Lemma subst_app_simpl' (l l' : list term) (k : nat) (t : term) n :
+  n = #|l| ->
+  subst (l ++ l') k t = subst l k (subst l' (k + n) t).
+Proof. intros ->; apply subst_app_simpl. Qed.
+
 Lemma type_Case_valid_btys {cf:checker_flags} Σ Γ ind u npar p c args :
     forall mdecl idecl (isdecl : declared_inductive Σ.1 mdecl ind idecl),
     wf Σ.1 ->
@@ -3608,6 +3642,13 @@ Proof.
     depelim car. depelim e.
     destruct y as [na [b|] ty]; simpl in *. intuition auto.
     destruct e as [_ e]. rewrite /mkProd_or_LetIn /=.
+    rewrite lift_it_mkProd_or_LetIn /= Nat.add_0_r.
+    eapply typing_spine_it_mkProd_or_LetIn; eauto.
+    
+                  
+    admit.
+  
+
     induction l'. simpl. depelim car. simpl in *.
     destruct cshape_indices. simpl.
     * econstructor. 2:eauto.
@@ -3648,7 +3689,30 @@ Proof.
       eapply (context_subst_lift _ _ _ #|cshape_args|) in eqpars => //.
       rewrite closed_ctx_lift // in eqpars.
       rewrite subst_it_mkProd_or_LetIn !subst_context_length !subst_instance_context_length !Nat.add_0_r /=.
-      eapply typing_spine_it_mkProd_or_LetIn_close.
+      eapply typing_spine_weaken_concl. auto.
+      eapply typing_spine_it_mkProd_or_LetIn_close; eauto.
+      2:{ rewrite to_extended_list_k_length.
+          now rewrite !context_assumptions_subst. }
+      apply make_context_subst_spec_inv.
+      rewrite /to_extended_list !to_extended_list_k_subst.
+      rewrite -subst_instance_to_extended_list_k.
+      rewrite List.rev_involutive.
+      eapply make_context_subst_spec. shelve. shelve.
+      assert (#|ind_params mdecl| = #|parinst|).
+      { eapply context_subst_length in eqpars. 
+        now rewrite subst_instance_context_length in eqpars. }
+      rewrite subst_instance_constr_mkApps.
+      rewrite !subst_mkApps.
+      rewrite subst_cstr_concl_head.
+      rewrite -subst_app_simpl'. now rewrite map_length.
+
+      eapply isWAT_it_mkProd_or_LetIn_app.
+      instantiate (1:=mapi (fun i x => tRel i) cshape_args).
+      rewrite PCUICUnivSubst.map_subst_instance_constr_to_extended_list_k.
+
+      pose (unfold_nat cshape_args).
+      rewrite (subst_to_extended_list_k _ _ pars). 
+      rewrite -to_extended_list_k_map_subst. rewrite subst_instance_context_length; lia.
 
       rewrite -map_map_compose.
       rewrite -to_extended_list_k_map_subst. lia. 
