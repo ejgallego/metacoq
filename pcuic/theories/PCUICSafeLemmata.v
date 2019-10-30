@@ -2200,6 +2200,28 @@ Proof.
   etransitivity. eapply red_cumul. eapply red1_red, red_zeta. auto.
 Qed.
 
+Lemma typing_spine_prod {cf:checker_flags} {Σ Γ na b B T args S} : 
+  wf Σ.1 ->
+  typing_spine Σ Γ (T {0 := b}) args S ->
+  isWfArity_or_Type Σ Γ (tProd na B T) ->
+  Σ ;;; Γ |- b : B ->
+  typing_spine Σ Γ (tProd na B T) (b :: args) S.
+Proof.
+  intros wfΣ Hsp.
+  depelim Hsp.
+  econstructor; eauto. constructor; auto.
+  intros Har. eapply isWAT_tProd in Har as [? ?]; eauto using typing_wf_local.
+  intros Hb.
+  econstructor. 3:eauto. 2:eauto. 
+  destruct i1 as [[ctx [s [Hs ?]]]|?].
+  - left. exists ([vass na B] ,,, ctx), s; simpl; intuition auto.
+    rewrite destArity_app Hs /= ?app_context_nil_l //.
+    now rewrite app_context_assoc.
+  - right. destruct i1 as [s Hs], i0 as [s' Hs'].
+    eexists. eapply type_Prod; eauto.
+  - econstructor; eauto.
+Qed.
+
 Lemma typing_spine_WAT_concl {cf:checker_flags} {Σ Γ T args S} : 
   typing_spine Σ Γ T args S ->
   isWfArity_or_Type Σ Γ S.
@@ -3051,52 +3073,100 @@ Proof.
     rewrite !subst_app_simpl /= !(subst_closedn s') //.
 Qed.
 
-Lemma typing_spine_it_mkProd_or_LetIn {cf:checker_flags} Σ Γ Δ T args s args' T' : 
+Lemma skipn_0 {A} (l : list A) : skipn 0 l = l.
+Proof. reflexivity. Qed.
+Hint Constructors subslet.
+
+Lemma subslet_app_inv {cf:checker_flags} Σ Γ Δ Δ' s : 
+subslet Σ Γ s (Δ ,,, Δ') ->
+subslet Σ Γ (skipn #|Δ'| s) Δ.
+Proof.
+  induction Δ' in Δ, s |- *; simpl => sub.
+  rewrite skipn_0. intuition auto.
+  depelim sub; rewrite skipn_S; auto.
+Qed.
+
+Lemma skipn_n_Sn {A} n s (x : A) xs : skipn n s = x :: xs -> skipn (S n) s = xs.
+Proof.
+  induction n in s, x, xs |- *.
+  - unfold skipn. now intros ->.
+  - destruct s; simpl. intros H; discriminate.
+    now rewrite !skipn_S.
+Qed. 
+
+Lemma make_context_subst_skipn {Γ args s s'} :
+  make_context_subst Γ args s = Some s' ->
+  skipn #|Γ| s' = s.
+Proof.
+  induction Γ in args, s, s' |- *.
+  - destruct args; simpl; auto.
+    now intros [= ->].
+    now discriminate.
+  - destruct a as [na [b|] ty]; simpl.
+    intros H.
+    specialize (IHΓ _ _ _ H).
+    now eapply skipn_n_Sn.
+    destruct args; try discriminate.
+    intros Hsub.
+    specialize (IHΓ _ _ _ Hsub).
+    now eapply skipn_n_Sn.
+Qed.
+
+Lemma typing_spine_it_mkProd_or_LetIn {cf:checker_flags} Σ Γ Δ Δ' T args s s' args' T' : 
   wf Σ.1 ->
-  context_subst (List.rev Δ) args s -> 
+  make_context_subst (List.rev Δ) args s' = Some s -> 
   typing_spine Σ Γ (subst0 s T) args' T' ->
   #|args| = context_assumptions Δ ->
-  typing_spine Σ Γ (it_mkProd_or_LetIn Δ T) (args ++ args') T'.
+  subslet Σ Γ s (Δ' ,,, Δ) ->
+  isWfArity_or_Type Σ (Γ ,,, Δ') (it_mkProd_or_LetIn Δ T) ->
+  typing_spine Σ Γ (subst0 s' (it_mkProd_or_LetIn Δ T)) (args ++ args') T'.
 Proof.
   intros wfΣ.
   generalize (le_n #|Δ|).
   generalize (#|Δ|) at 2.
-  induction n in Δ, args, s, T |- *.
+  induction n in Δ, Δ', args, s, s', T |- *.
   destruct Δ using rev_ind.
   intros le Hsub Hsp.
   destruct args; simpl; try discriminate.
-  simpl in Hsub. depelim Hsub.
-  now rewrite subst_empty in Hsp.
+  simpl in Hsub. now depelim Hsub.
   rewrite app_length /=; intros; elimtype False; lia.
   destruct Δ using rev_ind.
   intros le Hsub Hsp.
   destruct args; simpl; try discriminate.
-  simpl in Hsub; depelim Hsub.
-  now rewrite subst_empty in Hsp.
+  simpl in Hsub; now depelim Hsub.
   clear IHΔ.
   rewrite app_length /=; intros Hlen Hsub Hsp Hargs.
   rewrite context_assumptions_app in Hargs.
   destruct x as [na [b|] ty]; simpl in *.
-  rewrite it_mkProd_or_LetIn_app /= /mkProd_or_LetIn /=.
-  rewrite Nat.add_0_r in Hargs.
-  rewrite rev_app_distr in Hsub. simpl in Hsub. depelim Hsub; simpl in H; noconf H.
-  specialize (IHn Δ T args _ ltac:(lia) Hsub). 
-Admitted.
-(* 
-  simpl in IHn.
-  eapply typing_spine_letin; auto.
-  forward IHn. 
-  rewrite -subst_app_simpl.
-  rewrite subst_it_mkProd_or_LetIn !subst_context_length Nat.add_0_r.
-
-  eapply typing_spine_letin
-
-  specialize (IHn (subst_context [b] 0 Δ)). (subst [b] #|args| T) ltac:(rewrite subst_context_length; lia)).
-  rewrite context_assumptions_subst in IHn. specialize (IHn H0).
-  eapply typing_spine_letin; eauto. rewrite /subst1 subst_it_mkProd_or_LetIn Nat.add_0_r.
- *)
-
-
+  - rewrite it_mkProd_or_LetIn_app /= /mkProd_or_LetIn /=.
+    rewrite Nat.add_0_r in Hargs.
+    rewrite rev_app_distr in Hsub. simpl in Hsub.
+    intros subs. rewrite app_context_assoc in subs.
+    specialize (IHn Δ _ T args s _ ltac:(lia) Hsub Hsp Hargs subs).
+    intros Har. forward IHn. eapply isWAT_tLetIn in Har as [? [? ?]].
+    now rewrite app_context_assoc. all:auto. eauto using isWAT_wf_local.
+    eapply typing_spine_letin; auto.
+    rewrite /subst1.
+    now rewrite -subst_app_simpl.
+  - rewrite it_mkProd_or_LetIn_app /= /mkProd_or_LetIn /=.
+    rewrite rev_app_distr in Hsub. 
+    simpl in Hsub. destruct args; try discriminate.
+    simpl in Hargs. rewrite Nat.add_1_r in Hargs. noconf Hargs. simpl in H; noconf H.
+    intros subs. rewrite app_context_assoc in subs.    
+    specialize (IHn Δ _ T args s _ ltac:(lia) Hsub Hsp H subs).
+    intros Har.
+    forward IHn. epose proof (isWAT_tProd wfΣ (Γ := Γ ,,, Δ')).
+    forward X by eauto using isWAT_wf_local.
+    eapply X in Har as [? ?]. clear X. eapply i0.
+    eapply subslet_app_inv in subs as subsl.
+    depelim subsl; simpl in H1; noconf H1.
+    have Hskip := make_context_subst_skipn Hsub. 
+    rewrite List.rev_length in Hskip. rewrite Hskip in H0; noconf H0.
+    simpl; eapply typing_spine_prod; auto.
+    now rewrite /subst1 -subst_app_simpl.
+    eapply isWAT_subst in Har; auto. rewrite /subst1 /= in Har. eapply Har.
+    eauto using isWAT_wf_local. auto.
+Qed.
 
 Lemma type_Case_valid_btys {cf:checker_flags} Σ Γ ind u npar p c args :
     forall mdecl idecl (isdecl : declared_inductive Σ.1 mdecl ind idecl),
@@ -3242,6 +3312,7 @@ Proof.
       eapply typing_spine_it_mkProd_or_LetIn; eauto.
       rewrite -map_map_compose.
       rewrite PCUICUnivSubst.map_subst_instance_constr_to_extended_list_k.
+
       admit. admit.
       now rewrite map_length context_assumptions_subst subst_instance_context_assumptions
         to_extended_list_k_length.
