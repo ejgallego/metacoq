@@ -3112,7 +3112,7 @@ Proof.
     now eapply skipn_n_Sn.
 Qed.
 
-Lemma typing_spine_it_mkProd_or_LetIn {cf:checker_flags} Σ Γ Δ Δ' T args s s' args' T' : 
+Lemma typing_spine_it_mkProd_or_LetIn_gen {cf:checker_flags} Σ Γ Δ Δ' T args s s' args' T' : 
   wf Σ.1 ->
   make_context_subst (List.rev Δ) args s' = Some s -> 
   typing_spine Σ Γ (subst0 s T) args' T' ->
@@ -3167,6 +3167,150 @@ Proof.
     eapply isWAT_subst in Har; auto. rewrite /subst1 /= in Har. eapply Har.
     eauto using isWAT_wf_local. auto.
 Qed.
+
+Lemma typing_spine_it_mkProd_or_LetIn {cf:checker_flags} Σ Γ Δ T args s args' T' : 
+  wf Σ.1 ->
+  make_context_subst (List.rev Δ) args [] = Some s -> 
+  typing_spine Σ Γ (subst0 s T) args' T' ->
+  #|args| = context_assumptions Δ ->
+  subslet Σ Γ s Δ ->
+  isWfArity_or_Type Σ Γ (it_mkProd_or_LetIn Δ T) ->
+  typing_spine Σ Γ (it_mkProd_or_LetIn Δ T) (args ++ args') T'.
+Proof.
+  intros. 
+  pose proof (typing_spine_it_mkProd_or_LetIn_gen Σ Γ Δ [] T args s [] args' T'); auto.
+  now rewrite subst_empty app_context_nil_l in X3.
+Qed.
+
+Lemma map_subst_app_simpl l l' k (ts : list term) : 
+  map (subst l k ∘ subst l' (k + #|l|)) ts =
+  map (subst (l ++ l') k) ts.
+Proof.
+  eapply map_ext. intros.
+  now rewrite subst_app_simpl.
+Qed.
+
+Lemma context_subst_fun {ctx args s s'} : context_subst ctx args s -> context_subst ctx args s' -> s = s'.
+Proof.
+  induction 1 in s' |- *; intros H'; depelim H'; try simpl in H0; try noconf H0; auto.
+  eapply app_inj_tail in H1. intuition subst.
+  now specialize (IHcontext_subst _ H').
+  now specialize (IHcontext_subst _ H').
+Qed.
+
+Lemma context_subst_fun' {ctx args args' s s'} : context_subst ctx args s -> context_subst ctx args' s' -> #|args| = #|args'|.
+Proof.
+  induction 1 in args', s' |- *; intros H'; depelim H'; try simpl in H0; try noconf H0; auto.
+  now rewrite !app_length; specialize (IHcontext_subst _ _ H').
+  now specialize (IHcontext_subst _ _ H').
+Qed.
+
+Lemma eq_firstn {A} (l : list A) n : #|l| = #|firstn n l| -> n >= #|l|.
+Admitted.
+
+Lemma firstn_ge {A} (l : list A) n : #|l| <= n -> firstn n l = l.
+Proof.
+  induction l in n |- *; simpl; intros; auto. now rewrite firstn_nil.
+  destruct n; simpl. lia. rewrite IHl; auto. lia.
+Qed.
+
+Lemma context_subst_app {ctx ctx' args s} : context_subst (ctx ++ ctx')%list args s -> 
+  context_subst ctx (firstn (context_assumptions ctx) args) (firstn #|ctx| s).
+Proof.
+  revert ctx' args s.
+  induction ctx; intros ctx' args s; simpl.
+  intros; constructor.
+  destruct a as [na [b|] ty].
+  intros Hc. depelim Hc; simpl in H; noconf H.
+  simpl. 
+  
+  simpl.
+  rewrite app_nil_r. intros Hc.
+  induction Hc; try constructor.
+  rewrite firstn_app.
+  simpl context_assumptions.
+  assert (S (context_assumptions Γ) - #|args| >= 1).
+  pose proof (context_subst_length _ _ _ IHHc).
+  pose proof (context_subst_fun' Hc IHHc).
+  eapply eq_firstn in H0. lia.
+  rewrite firstn_ge. lia. rewrite firstn_ge.
+  simpl length. lia.
+  simpl. constructor; auto.
+  pose proof (context_subst_length _ _ _ Hc).
+  now rewrite firstn_ge; try lia.
+
+  simpl.
+  assert(context_assumptions Γ >= #|args|).
+  pose proof (context_subst_length _ _ _ IHHc).
+  pose proof (context_subst_fun' Hc IHHc). eapply eq_firstn in H0. lia.
+  rewrite firstn_ge; try lia. 
+  pose proof (context_subst_length _ _ _ Hc).
+  rewrite firstn_ge; try lia.
+  constructor; auto.
+
+  intros Hc.
+  specialize (IHctx' (ctx ++ [a])%list args s).
+  forward IHctx'. rewrite -app_assoc. auto.
+  pose proof (context_subst_length _ _ _ IHctx').
+  rewrite app_length /= in H.
+  pose proof (context_subst_fun' Hc IHHc). eapply eq_firstn in H0. lia.
+
+  eapply (context_subst_def).
+  
+  rewrite /=.
+  destruct args. simpl. rewrite firstn_nil.
+  eapply (context_subst_ass Γ []).
+  now rewrite H firstn_all.
+  simpl in *. 
+  eapply (context_subst_ass Γ ).
+  
+  
+  induc
+
+  induction 1 in args', s' |- *; intros H'; depelim H'; try simpl in H0; try noconf H0; auto.
+  now rewrite !app_length; specialize (IHcontext_subst _ _ H').
+
+Lemma make_context_subst_rec_spec ctx args s tele args' s' :
+  context_subst ctx args s ->
+  (make_context_subst tele args' s = Some s') <~>
+  context_subst (List.rev tele ++ ctx)%list (args ++ args') s'.
+Proof.
+  induction tele in ctx, args, s, args', s' |- *.
+  - move=> /= Hc. case: args'.
+    split.  move => [= <-].
+    now rewrite app_nil_r.
+    rewrite app_nil_r.
+    move/context_subst_fun => Hs. now specialize (Hs _ Hc).
+    intros. split; try discriminate.
+    intros H2. pose proof (context_subst_fun' Hc H2).
+    rewrite app_length /= in H. now lia.
+  - move=> Hc /=. case: a => [na [body|] ty] /=.
+    -- specialize (IHtele (vdef na body ty :: ctx) args (subst0 s body :: s) args' s').
+       move=> /=. rewrite <- app_assoc.
+       now forward IHtele by (constructor; auto).
+    -- case: args' => [|a args'].
+      split; [congruence|].
+      intros Hc'.
+
+
+      specialize (IHtele _ _ _ [] s' Hc). simpl in IHtele.
+
+       specialize (IHtele (vass na ty :: ctx) (args ++ [a]) (a :: s) args' s').
+       move=> /=. rewrite <- app_assoc.
+       move/(IHtele _). move=> H /=. simpl in H. rewrite <- app_assoc in H. apply H.
+       constructor. auto.
+Qed.
+
+Lemma make_context_subst_spec : forall (tele : list context_decl) (args s' : list term),
+context_subst (List.rev tele) args s' ->
+make_context_subst tele args [] = Some s'.
+Proof.
+  induction tele; simpl; intros args s'.
+  destruct args; intros H; now depelim H.
+  destruct a as [na [b|] ty] => /=.
+  intros. rewrite subst_empty.
+  rewrite List.rev_app_distr /=. intros H; depelim H => /=.
+  
 
 Lemma type_Case_valid_btys {cf:checker_flags} Σ Γ ind u npar p c args :
     forall mdecl idecl (isdecl : declared_inductive Σ.1 mdecl ind idecl),
@@ -3310,8 +3454,23 @@ Proof.
       rewrite app_nil_r !subst_instance_constr_it_mkProd_or_LetIn.
       rewrite /subst1 !subst_it_mkProd_or_LetIn !subst_instance_context_length Nat.add_0_r.
       eapply typing_spine_it_mkProd_or_LetIn; eauto.
+      instantiate (1 := parinst).
+      pose proof (context_subst_length _ _ _ eqpars).
+      rewrite subst_instance_context_length in H. rewrite H.
       rewrite -map_map_compose.
       rewrite PCUICUnivSubst.map_subst_instance_constr_to_extended_list_k.
+      rewrite -map_map_compose.
+      rewrite -to_extended_list_k_map_subst. lia.
+      rewrite (subst_to_extended_list_k _ _ pars). admit.
+
+      
+
+
+      rewrite -map_map_compose.
+      rewrite -to_extended_list_k_map_subst. lia. 
+      shelve.
+      
+      rewrite -map_map_compose.
 
       admit. admit.
       now rewrite map_length context_assumptions_subst subst_instance_context_assumptions
