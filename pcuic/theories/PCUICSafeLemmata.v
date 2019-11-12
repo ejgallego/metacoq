@@ -3077,12 +3077,42 @@ Proof. reflexivity. Qed.
 Hint Constructors subslet.
 
 Lemma subslet_app_inv {cf:checker_flags} Σ Γ Δ Δ' s : 
-subslet Σ Γ s (Δ ,,, Δ') ->
-subslet Σ Γ (skipn #|Δ'| s) Δ.
+  subslet Σ Γ s (Δ ,,, Δ') ->
+  subslet Σ Γ (skipn #|Δ'| s) Δ * 
+  subslet Σ Γ (firstn #|Δ'| s) (subst_context (skipn #|Δ'| s) 0 Δ').
 Proof.
-  induction Δ' in Δ, s |- *; simpl => sub.
-  rewrite skipn_0. intuition auto.
-  depelim sub; rewrite skipn_S; auto.
+  intros sub. split.
+  - induction Δ' in Δ, s, sub |- *; simpl.
+    rewrite skipn_0. intuition auto.
+    depelim sub; rewrite skipn_S; auto.
+  - induction Δ' in Δ, s, sub |- *; simpl. constructor.
+    destruct s. depelim sub.
+    depelim sub.
+    * rewrite subst_context_snoc. constructor. eauto.
+      rewrite skipn_S Nat.add_0_r /=.
+      assert(#|Δ'| = #|firstn #|Δ'| s|).
+      { pose proof (subslet_length sub).
+        rewrite app_context_length in H.
+        rewrite firstn_length_le; lia. }
+      rewrite {3}H.
+      rewrite -subst_app_simpl.
+      now rewrite firstn_skipn.
+    * rewrite subst_context_snoc.
+      rewrite skipn_S Nat.add_0_r /=.
+      rewrite /subst_decl /map_decl /=.
+      specialize (IHΔ' _ _ sub).
+      epose proof (cons_let_def _ _ _ _ _ (subst (skipn #|Δ'| s0) #|Δ'| t0) 
+      (subst (skipn #|Δ'| s0) #|Δ'| T) IHΔ').
+      assert(#|Δ'| = #|firstn #|Δ'| s0|).
+      { pose proof (subslet_length sub).
+        rewrite app_context_length in H.
+        rewrite firstn_length_le; lia. }      
+      rewrite {3 6}H in X.
+      rewrite - !subst_app_simpl in X.
+      rewrite !firstn_skipn in X.
+      specialize (X t1).
+      rewrite {3}H in X.
+      now rewrite - !subst_app_simpl firstn_skipn in X.
 Qed.
 
 Lemma skipn_n_Sn {A} n s (x : A) xs : skipn n s = x :: xs -> skipn (S n) s = xs.
@@ -3179,40 +3209,6 @@ Proof.
   intros. 
   pose proof (typing_spine_it_mkProd_or_LetIn_gen Σ Γ Δ [] T args s [] args' T'); auto.
   now rewrite subst_empty app_context_nil_l in X3.
-Qed.
-
-Lemma subslet_app_inv' {cf:checker_flags} Σ Γ Δ Δ' s : 
-  subslet Σ Γ s (Δ ,,, Δ') ->
-  subslet Σ Γ (firstn #|Δ'| s) (subst_context (skipn #|Δ'| s) 0 Δ').
-Proof.
-  induction Δ' in Δ, s |- *; simpl => sub. constructor.
-  destruct s. depelim sub.
-  depelim sub.
-  - rewrite subst_context_snoc. constructor. eauto.
-    rewrite skipn_S Nat.add_0_r /=.
-    assert(#|Δ'| = #|firstn #|Δ'| s|).
-    { pose proof (subslet_length sub).
-      rewrite app_context_length in H.
-      rewrite firstn_length_le; lia. }
-    rewrite {3}H.
-    rewrite -subst_app_simpl.
-    now rewrite firstn_skipn.
-  - rewrite subst_context_snoc.
-    rewrite skipn_S Nat.add_0_r /=.
-    rewrite /subst_decl /map_decl /=.
-    specialize (IHΔ' _ _ sub).
-    epose proof (cons_let_def _ _ _ _ _ (subst (skipn #|Δ'| s0) #|Δ'| t0) 
-     (subst (skipn #|Δ'| s0) #|Δ'| T) IHΔ').
-    assert(#|Δ'| = #|firstn #|Δ'| s0|).
-    { pose proof (subslet_length sub).
-      rewrite app_context_length in H.
-      rewrite firstn_length_le; lia. }      
-    rewrite {3 6}H in X.
-    rewrite - !subst_app_simpl in X.
-    rewrite !firstn_skipn in X.
-    specialize (X t1).
-    rewrite {3}H in X.
-    now rewrite - !subst_app_simpl firstn_skipn in X.
 Qed.
 
 Lemma substitution_it_mkProd_or_LetIn {cf:checker_flags} Σ Γ Δ T s : 
@@ -3341,9 +3337,6 @@ Proof.
   now specialize (IHcontext_subst _ _ H').
 Qed.
 
-Lemma eq_firstn {A} (l : list A) n : #|l| = #|firstn n l| -> n >= #|l|.
-Admitted.
-
 Lemma firstn_ge {A} (l : list A) n : #|l| <= n -> firstn n l = l.
 Proof.
   induction l in n |- *; simpl; intros; auto. now rewrite firstn_nil.
@@ -3361,28 +3354,58 @@ Proof.
   rewrite app_length. rewrite IHcontext_subst; simpl; lia.
 Qed.
 
+Lemma skipn_all {A} (l : list A) : skipn #|l| l = [].
+Proof.
+  induction l; simpl; auto.
+Qed.
+Hint Constructors context_subst : core.
+Close Scope string_scope.
+
+Lemma skipn_app_le {A} n (l l' : list A) : n <= #|l| -> skipn n (l ++ l') = skipn n l ++ l'.
+Proof.
+  induction l in n, l' |- *; simpl; auto.
+  intros Hn. destruct n; try lia. reflexivity.
+  intros Hn. destruct n. reflexivity.
+  rewrite !skipn_S. now apply IHl.
+Qed.
+
 Lemma context_subst_app {ctx ctx' args s} : 
   context_subst (ctx ++ ctx')%list args s -> 
+  context_subst (subst_context (skipn #|ctx| s) 0 ctx) (skipn (context_assumptions ctx') args) (firstn #|ctx| s) *
   context_subst ctx' (firstn (context_assumptions ctx') args) (skipn #|ctx| s).
 Proof.
   revert ctx' args s.
   induction ctx; intros ctx' args s; simpl.
-  intros Hc. rewrite !skipn_0.
-  rewrite -(context_subst_length2 Hc).
-  now rewrite firstn_all.
-  intros Hc.
-  depelim Hc. simpl.
-  rewrite skipn_S.
-  specialize (IHctx _ _ _ Hc).
-  pose proof (context_subst_length2 IHctx).
-  pose proof (context_subst_length2 Hc).
-  rewrite context_assumptions_app in H0. 
-  rewrite firstn_app. rewrite (firstn_0 [a0]).
-  rewrite firstn_length_le in H. lia. lia.
-  now rewrite app_nil_r.
-  
-  specialize (IHctx _ _ _ Hc).
-  now rewrite skipn_S.
+  - intros Hc. rewrite !skipn_0.
+    rewrite - !(context_subst_length2 Hc).
+    now rewrite firstn_all skipn_all.
+  - intros Hc.
+    depelim Hc. simpl.
+    rewrite skipn_S.
+    specialize (IHctx _ _ _ Hc) as [IHctx IHctx'].
+    pose proof (context_subst_length2 IHctx).
+    pose proof (context_subst_length2 IHctx').
+    pose proof (context_subst_length2 Hc).
+    rewrite context_assumptions_app in H1. 
+    rewrite firstn_app. rewrite (firstn_0 [a0]).
+    rewrite firstn_length_le in H0. lia. lia.
+    rewrite app_nil_r. split; auto.
+    rewrite skipn_app_le. lia.
+    rewrite subst_context_snoc.
+    now constructor.
+
+    specialize (IHctx _ _ _ Hc).
+    split; try now rewrite skipn_S.
+    pose proof (context_subst_length2 Hc).
+    rewrite context_assumptions_app in H.
+    destruct IHctx as [IHctx _].
+    pose proof (context_subst_length _ _ _ IHctx).
+    rewrite subst_context_snoc. rewrite !skipn_S.
+    rewrite /subst_decl /map_decl /= Nat.add_0_r.
+    rewrite -{4}(firstn_skipn #|ctx| s0).
+    rewrite subst_app_simpl. simpl.
+    rewrite subst_context_length in H0. rewrite -H0.
+    now constructor.
 Qed.
 
 Lemma make_context_subst_rec_spec ctx args s tele args' s' :
@@ -3521,6 +3544,144 @@ Lemma subst_app_simpl' (l l' : list term) (k : nat) (t : term) n :
   subst (l ++ l') k t = subst l k (subst l' (k + n) t).
 Proof. intros ->; apply subst_app_simpl. Qed.
 
+Lemma ctx_length_ind (P : context -> Type) (p0 : P [])
+  (pS : forall d Γ, (forall Γ', #|Γ'| <= #|Γ|  -> P Γ') -> P (d :: Γ)) 
+  Γ : P Γ.
+Proof.
+  generalize (le_n #|Γ|).
+  generalize #|Γ| at 2.
+  induction n in Γ |- *.
+  destruct Γ; [|simpl; intros; elimtype False; lia].
+  intros. apply p0.
+  intros.
+  destruct Γ; simpl in *.
+  apply p0. apply pS. intros. apply IHn. simpl. lia.
+Qed.
+
+Lemma ctx_length_rev_ind (P : context -> Type) (p0 : P [])
+  (pS : forall d Γ, (forall Γ', #|Γ'| <= #|Γ|  -> P Γ') -> P (Γ ++ [d])) 
+  Γ : P Γ.
+Proof.
+  generalize (le_n #|Γ|).
+  generalize #|Γ| at 2.
+  induction n in Γ |- *.
+  destruct Γ using rev_ind; [|simpl; rewrite app_length /=; intros; elimtype False; try lia].
+  intros. apply p0.
+  destruct Γ using rev_ind; simpl in *; rewrite ?app_length /=; intros Hlen.
+  intros. apply p0.
+  apply pS. intros. apply IHn. simpl. lia.
+Qed.
+
+Arguments firstn : simpl nomatch.
+Arguments skipn : simpl nomatch.
+
+Lemma subst_app_context' (s s' : list term) (Γ : context) n :
+  n = #|s| ->  
+  subst_context (s ++ s') 0 Γ = subst_context s 0 (subst_context s' n Γ).
+Proof.
+  intros ->; apply subst_app_context.
+Qed.
+
+Lemma skipn_firstn_skipn {A} (l : list A) n : skipn n (firstn (S n) l) ++ skipn (S n) l = skipn n l.
+Proof.
+  induction l in n |- *; simpl; auto. now rewrite app_nil_r.
+  destruct n=> /=; auto.
+Qed.
+
+Lemma firstn_firstn_firstn {A} (l : list A) n : firstn n (firstn (S n) l) = firstn n l.
+Proof.
+  induction l in n |- *; simpl; auto.
+  destruct n=> /=; auto. now rewrite IHl.
+Qed.
+
+Lemma type_instantiate_params {cf:checker_flags} Σ Γ params pars parinst ty :
+  wf Σ.1 ->
+  isWfArity_or_Type Σ Γ (it_mkProd_or_LetIn params ty) ->
+  context_subst params pars parinst ->
+  subslet Σ Γ parinst params ->
+  ∑ ty', (instantiate_params params pars (it_mkProd_or_LetIn params ty) = Some ty') *
+  isWfArity_or_Type Σ Γ ty'.
+Proof.
+  intros wfΣ.
+  revert pars parinst ty.
+  induction params using ctx_length_rev_ind; simpl;
+  intros pars parinst ty wat ms sub.
+  depelim sub; depelim ms.
+  - simpl. rewrite /instantiate_params.
+    simpl. rewrite subst_empty. simpl in wat. intuition eauto.
+  - rewrite it_mkProd_or_LetIn_app in wat |- *.
+    destruct d as [na [b|] ty']. simpl in *.
+    unfold mkProd_or_LetIn in *; simpl in *.
+    eapply context_subst_app in ms.
+    simpl in ms.
+    destruct ms as [msl msr].
+    depelim msr; simpl in H; noconf H. depelim msr.
+    rewrite subst_empty in H0. rewrite H0 in msl.
+    eapply subslet_app_inv in sub as [sl sr].
+    depelim sl; simpl in H1; noconf H1. depelim sl.
+    eapply isWAT_tLetIn in wat as [? [? ?]]; eauto using typing_wf_local.
+    eapply (isWAT_subst wfΣ (Δ:=[vdef na b ty'])) in i0; eauto.
+    3:constructor; eauto.
+    2:constructor; eauto using typing_wf_local.
+    rewrite subst_empty in i0.
+    rewrite /subst1 subst_it_mkProd_or_LetIn Nat.add_0_r in i0.
+    rewrite H0 in sr.
+    specialize (X (subst_context [b] 0 Γ0) ltac:(rewrite subst_context_length; lia) _ _ _ i0 msl sr).
+    destruct X as [ty'' [instpar wfa]].
+    exists ty''. split=>//.
+    rewrite !instantiate_params_ in instpar |- *.
+    rewrite -{}instpar.
+    rewrite rev_app_distr. simpl. rewrite subst_empty.
+    rewrite - !H0 in msl sr |- *.
+    clear -msl sr. revert msl sr.
+    revert Γ0 pars ty parinst.
+    refine (ctx_length_rev_ind _ _ _); simpl; intros.
+    depelim msl. simpl. now rewrite subst_empty.
+    rewrite subst_context_app !rev_app_distr !app_length !Nat.add_1_r /=.
+    destruct d as [na [b|] ty']=> /=.
+    rewrite {1}/subst_context /fold_context /= /app_context !it_mkProd_or_LetIn_app /=.
+    rewrite !app_length /= !Nat.add_1_r !subst_context_app /= in msl, sr.
+    eapply context_subst_app in msl as [msl msr].
+    rewrite !context_assumptions_subst in msl, msr.
+    rewrite !subst_context_length /= in msl, msr.
+    rewrite -subst_app_context' in msl.
+    admit.
+    rewrite /subst_context /fold_context /= in msr.
+    rewrite skipn_firstn_skipn firstn_firstn_firstn in msl.
+    specialize (H Γ0 ltac:(lia) _ ty _ msl).
+    eapply subslet_app_inv in sr as [sl sr].
+    rewrite subst_context_length in sl, sr.
+    rewrite -subst_app_context' in sr. admit.
+    rewrite skipn_firstn_skipn firstn_firstn_firstn in sr.
+    specialize (H sr).
+    depelim msr; simpl in H0; noconf H0.
+    eapply skipn_n_Sn in H1. depelim msr.
+    rewrite /subst_context /fold_context /= in sl.
+    depelim sl; simpl in H2; noconf H2. depelim sl. rewrite !subst_empty /= in t0 H0 |- *.
+    f_equal.
+    simpl in sl.
+    cbn in msl, sr.
+    destruct pars; simpl. depelim msl.
+
+
+    eapply make_context_subst_spec in H0. rewrite List.rev_involutive in H0.
+
+    revert Γ0 pars ty s' H0. 
+    refine (ctx_length_rev_ind _ _ _); simpl; intros.
+    destruct pars; try discriminate.
+    depelim H0. now rewrite subst_empty.
+    depelim H0.
+    rewrite it_mkProd_or_LetIn_app rev_app_distr.
+    simpl. destruct d as [na' [b'|] ?] => /=.
+
+
+    rewrite subst_context_app in H0. depelim H0. 
+    unfold app_contextdiscriminate.
+
+    simpl.
+    eapply subst_instantiate_params_subst in  Heq.
+    simpl.
+
 Lemma type_Case_valid_btys {cf:checker_flags} Σ Γ ind u npar p c args :
     forall mdecl idecl (isdecl : declared_inductive Σ.1 mdecl ind idecl),
     wf Σ.1 ->
@@ -3633,6 +3794,18 @@ Proof.
   rewrite Nat.add_0_r in X0.
   pose proof (typing_wf_local X).
   eapply type_mkApps. all:eauto.
+  red in car.
+  assert(Σ ;;; Γ |- p : it_mkProd_or_LetIn ({|
+  decl_name := nNamed (ind_name idecl);
+  decl_body := None;
+  decl_type := mkApps (tInd ind u)
+                 (map (lift0 #|indctx|) pars ++ to_extended_list indctx) |}
+  :: indctx) (tSort ps)).
+  { eapply type_Cumul. eauto. left; eexists _, _; intuition eauto.
+    rewrite destArity_it_mkProd_or_LetIn. reflexivity.
+    rewrite app_context_nil_l /=. constructor.
+  }
+
   eapply weakening_gen; eauto.
   - now rewrite !subst_context_length !subst_instance_context_length.
   - eapply typing_wf_local in X.
