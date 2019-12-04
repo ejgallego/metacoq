@@ -42,6 +42,31 @@ Proof.
 Qed.
 
 
+
+Lemma isWAT_tProd {cf:checker_flags} {Σ : global_env_ext} (HΣ' : wf Σ)
+      {Γ} (HΓ : wf_local Σ Γ) {na A B}
+  : isWfArity_or_Type Σ Γ (tProd na A B)
+    <~> (isType Σ Γ A × isWfArity_or_Type Σ (Γ,, vass na A) B).
+Proof.
+  split; intro HH.
+  - destruct HH as [[ctx [s [H1 H2]]]|[s H]].
+    + cbn in H1. apply destArity_app_Some in H1.
+      destruct H1 as [ctx' [H1 HH]]; subst ctx.
+      rewrite app_context_assoc in H2. split.
+      * apply wf_local_app in H2. inversion H2; subst. assumption.
+      * left. exists ctx', s. split; tas.
+    + apply inversion_Prod in H; tas. destruct H as [s1 [s2 [HA [HB Hs]]]].
+      split.
+      * eexists; tea.
+      * right. eexists; tea.
+  - destruct HH as [HA [[ctx [s [H1 H2]]]|HB]].
+    + left. exists ([vass na A] ,,, ctx), s. split.
+      * cbn. now rewrite destArity_app H1.
+      * now rewrite app_context_assoc.
+    + right. destruct HA as [sA HA], HB as [sB HB].
+      eexists. econstructor; eassumption.
+Defined.
+
 Lemma type_tFix_inv {cf:checker_flags} (Σ : global_env_ext) Γ mfix idx T : wf Σ ->
   Σ ;;; Γ |- tFix mfix idx : T ->
   { T' & { rarg & {f & (unfold_fix mfix idx = Some (rarg, f)) * (Σ ;;; Γ |- f : T') * (Σ ;;; Γ |- T' <= T) }}}%type.
@@ -340,6 +365,47 @@ Definition SR_red1 {cf:checker_flags} (Σ : global_env_ext) Γ t T :=
 
 Hint Resolve conv_ctx_refl : pcuic.
 
+Definition branch_type ind mdecl (idecl : one_inductive_body) params u p i (br : ident * term * nat) :=
+  let inds := inds ind.(inductive_mind) u mdecl.(ind_bodies) in
+  let '(id, t, ar) := br in
+  let ty := subst0 inds (subst_instance_constr u t) in
+  match instantiate_params (subst_instance_context u mdecl.(ind_params)) params ty with
+  | Some ty =>
+  let '(sign, ccl) := decompose_prod_assum [] ty in
+  let nargs := List.length sign in
+  let allargs := snd (decompose_app ccl) in
+  let '(paramrels, args) := chop mdecl.(ind_npars) allargs in
+  let cstr := tConstruct ind i u in
+  let args := (args ++ [mkApps cstr (paramrels ++ to_extended_list sign)])%list in
+  Some (ar, it_mkProd_or_LetIn sign (mkApps (lift0 nargs p) args))
+| None => None
+end.
+
+Lemma nth_map_option_out {A B} (f : nat -> A -> option B) l l' i t : map_option_out (mapi f l) = Some l' ->
+  nth_error l' i = Some t -> 
+  (∑ x, (nth_error l i = Some x) * (f i x = Some t)).
+Proof.
+  unfold mapi.
+  rewrite -{3}(Nat.add_0_r i).
+  generalize 0.
+  induction l in i, l' |- *; intros n; simpl. intros [= <-]. rewrite nth_error_nil; discriminate.
+  simpl. destruct (f n a) eqn:Heq => //.
+  destruct (map_option_out (mapi_rec f l (S n))) eqn:Heq' => //.
+  intros [= <-].
+  destruct i; simpl. intros [= ->]. now exists a.
+  specialize (IHl _ i _ Heq').
+  now rewrite plus_n_Sm.
+Qed.
+
+Lemma nth_branches_type ind mdecl idecl args u p i t btys : map_option_out (build_branches_type ind mdecl idecl args u p) = Some btys ->
+  nth_error btys i = Some t -> 
+  (∑ br, (nth_error idecl.(ind_ctors) i = Some br) *
+    (branch_type ind mdecl idecl args u p i br = Some t)).
+Proof.
+  intros Htys Hnth.
+  eapply nth_map_option_out in Htys; eauto.
+Qed.
+
 Lemma sr_red1 {cf:checker_flags} : env_prop SR_red1.
 Proof.
   apply typing_ind_env; intros Σ wfΣ Γ wfΓ; unfold SR_red1; intros **; rename_all_hyps;
@@ -432,27 +498,8 @@ Proof.
     unshelve eapply (context_conversion _ wfΣ _ _ _ _ Hb); eauto with wf.
     constructor. auto with pcuic. constructor ; eauto.
     constructor; auto with pcuic. red; eauto.
-    admit.
-    clear -wfΣ i.
-    (** Awfully complicated for a well-formedness condition *)
-    { destruct i as [[ctx [s [Hs Hs']]]|[s Hs]].
-      left.
-      simpl in Hs. red.
-      generalize (destArity_spec ([] ,, vass na A) B). rewrite Hs.
-      intros. simpl in H.
-      apply tProd_it_mkProd_or_LetIn in H.
-      destruct H as [ctx' [-> Hb]].
-      exists ctx', s.
-      intuition auto. rewrite app_context_assoc in Hs'. apply Hs'.
-      right. exists s.
-      eapply inversion_Prod in Hs as [s1 [s2 [Ha [Hp Hp']]]].
-      eapply type_Cumul; eauto.
-      left. exists [], s. intuition auto. now apply typing_wf_local in Hp.
-      apply cumul_Sort_inv in Hp'.
-      eapply cumul_trans with (tSort (Universe.sort_of_product s1 s2)). auto.
-      constructor.
-      cbn. constructor. apply leq_universe_product.
-      constructor; constructor ; auto. auto. }
+    eapply isWAT_tProd in i as [Hs _]; auto.
+    eapply isWAT_tProd in i as [_ Hs]; intuition auto.
 
   - (* Fixpoint unfolding *)
     assert (args <> []) by (destruct args; simpl in *; congruence).
@@ -493,7 +540,38 @@ Proof.
     now rewrite app_context_nil_l.
     eapply typing_subst_instance_decl with (Γ0:=[]); tea.
 
-  - (* iota reduction *) admit.
+  - (* iota reduction *) 
+    unfold iota_red.
+    eapply inversion_mkApps in typec as [A [U [tyc [tyargs tycum]]]].
+    eapply (inversion_Construct Σ wfΣ) in tyc as [mdecl' [idecl' [cdecl' [wfl [declc [Hu tyc]]]]]].
+    destruct declc as [[declmi decli] declc]. 
+    destruct isdecl as [declmi' decli'].
+    red in declmi', declmi. rewrite declmi' in declmi. noconf declmi.
+    rewrite decli' in decli. noconf decli. simpl in declc. 2:auto.
+    destruct (nth_nth_error (@eq_refl _ (nth c0 brs (0, tDummy)))).
+    assert (∑ t', nth_error btys c0 = Some t').
+    pose proof (All2_length _ _ X5). eapply nth_error_Some_length in e. rewrite H in e.
+    destruct (nth_error_spec btys c0). eexists; eauto. elimtype False; lia.
+    destruct H as [t' Ht'].
+    eapply nth_branches_type in heq_map_option_out; eauto.
+    destruct heq_map_option_out as [[[id brty] nargs] [Hnth' Hbrty]].
+    eapply All2_nth_error in X5; eauto.
+    2:{ admit. }
+    destruct X5 as [[[[Hnth tynth] tyu] tyt'] tyredu].
+    
+
+
+    rewrite build_branches_type_ in heq_map_option_out. 
+    destruct (build_branches_type) eqn:Hbrs.
+    simpl in heq_map_option_out. noconf heq_map_option_out. destruct c0; discriminate.
+    simpl in heq_map_option_out. destruct o; try discriminate.
+    destruct l; try discriminate.
+    ea 
+    rewrite <- e.
+    destruct isdecl [as ], decli.
+    destruct 
+    
+
   - (* Case congruence *) admit.
   - (* Case congruence *) admit.
   - (* Case congruence *) admit.
