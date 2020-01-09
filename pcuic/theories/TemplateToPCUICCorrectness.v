@@ -1020,8 +1020,6 @@ Proof.
 Qed.
 Ltac wf_inv H := try apply wf_inv in H; simpl in H; repeat destruct_conjs.
 
-Derive Signature for All.
-
 Lemma trans_red1 Σ Γ T U :
   TTy.on_global_env (fun Σ => wf_decl_pred) Σ ->
   List.Forall wf_decl Γ ->

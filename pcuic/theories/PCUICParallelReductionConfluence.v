@@ -3235,23 +3235,10 @@ Section Confluence.
     specialize (IHl _ H). constructor; auto.
   Qed.
 
-  Lemma mapi_rec_compose {A B C} (g : nat -> B -> C) (f : nat -> A -> B) k l :
-    mapi_rec g (mapi_rec f l k) k = mapi_rec (fun k x => g k (f k x)) l k.
-  Proof.
-    induction l in k |- *; simpl; auto. now rewrite IHl.
-  Qed.
-
-  Lemma mapi_compose {A B C} (g : nat -> B -> C) (f : nat -> A -> B) l :
-    mapi g (mapi f l) = mapi (fun k x => g k (f k x)) l.
-  Proof. apply mapi_rec_compose. Qed.
-
-
   Lemma All2_refl_All {A} (P : A -> A -> Type) l : All2 P l l -> All (fun x => P x x) l.
   Proof.
     induction l; intros H; depelim H. constructor. constructor; auto.
   Qed.
-  Lemma mapi_cst_map {A B} (f : A -> B) l : mapi (fun _ => f) l = map f l.
-  Proof. unfold mapi. generalize 0. induction l; cbn; auto. intros. now rewrite IHl. Qed.
 
   Lemma All_All2_telescopei_gen (Γ Γ' Δ Δ' : context) (m m' : mfixpoint term) :
     #|Δ| = #|Δ'| ->

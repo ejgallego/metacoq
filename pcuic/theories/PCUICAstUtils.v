@@ -387,6 +387,12 @@ Fixpoint context_assumptions (Γ : context) :=
     end
   end.
 
+Lemma context_assumptions_length_bound Γ : context_assumptions Γ <= #|Γ|.
+Proof.
+  induction Γ; simpl; auto. destruct a as [? [?|] ?]; simpl; auto.
+  lia.
+Qed.
+
 Definition map_one_inductive_body npars arities f (n : nat) m :=
   match m with
   | Build_one_inductive_body ind_name ind_type ind_kelim ind_ctors ind_projs =>
@@ -407,6 +413,20 @@ Proof.
   unfold fold_context. rewrite rev_mapi. rewrite List.rev_involutive.
   apply mapi_ext. intros. f_equal. now rewrite List.rev_length.
 Qed.
+
+
+Lemma mapi_rec_compose {A B C} (g : nat -> B -> C) (f : nat -> A -> B) k l :
+  mapi_rec g (mapi_rec f l k) k = mapi_rec (fun k x => g k (f k x)) l k.
+Proof.
+  induction l in k |- *; simpl; auto. now rewrite IHl.
+Qed.
+
+Lemma mapi_compose {A B C} (g : nat -> B -> C) (f : nat -> A -> B) l :
+  mapi g (mapi f l) = mapi (fun k x => g k (f k x)) l.
+Proof. apply mapi_rec_compose. Qed.
+
+Lemma mapi_cst_map {A B} (f : A -> B) l : mapi (fun _ => f) l = map f l.
+Proof. unfold mapi. generalize 0. induction l; cbn; auto. intros. now rewrite IHl. Qed.
 
 Lemma fold_context_length f Γ : length (fold_context f Γ) = length Γ.
 Proof.
@@ -928,6 +948,68 @@ Proof.
   rewrite IHx. now rewrite app_comm_cons.
 Qed.
 
+
+Lemma rev_map_spec {A B} (f : A -> B) (l : list A) : 
+  rev_map f l = List.rev (map f l).
+Proof.
+  unfold rev_map.
+  rewrite -(app_nil_r (List.rev (map f l))).
+  generalize (@nil B).
+  induction l; simpl; auto. intros l0.
+  rewrite IHl. now rewrite -app_assoc.
+Qed.
+
+Lemma skipn_0 {A} (l : list A) : skipn 0 l = l.
+Proof. reflexivity. Qed.
+
+Lemma skipn_n_Sn {A} n s (x : A) xs : skipn n s = x :: xs -> skipn (S n) s = xs.
+Proof.
+  induction n in s, x, xs |- *.
+  - unfold skipn. now intros ->.
+  - destruct s; simpl. intros H; discriminate. apply IHn.
+Qed. 
+
+Lemma skipn_all {A} (l : list A) : skipn #|l| l = [].
+Proof.
+  induction l; simpl; auto.
+Qed.
+
+Lemma skipn_app_le {A} n (l l' : list A) : n <= #|l| -> skipn n (l ++ l') = skipn n l ++ l'.
+Proof.
+  induction l in n, l' |- *; simpl; auto.
+  intros Hn. destruct n; try lia. reflexivity.
+  intros Hn. destruct n. reflexivity.
+  rewrite !skipn_S. apply IHl. lia.
+Qed.
+
+Lemma firstn_ge {A} (l : list A) n : #|l| <= n -> firstn n l = l.
+Proof.
+  induction l in n |- *; simpl; intros; auto. now rewrite firstn_nil.
+  destruct n; simpl. lia. rewrite IHl; auto. lia.
+Qed.
+
+Lemma firstn_0 {A} (l : list A) n : n = 0 -> firstn n l = [].
+Proof.
+  intros ->. reflexivity.
+Qed.
+
+
+Arguments firstn : simpl nomatch.
+Arguments skipn : simpl nomatch.
+
+
+Lemma skipn_firstn_skipn {A} (l : list A) n : skipn n (firstn (S n) l) ++ skipn (S n) l = skipn n l.
+Proof.
+  induction l in n |- *; simpl; auto. now rewrite app_nil_r.
+  destruct n=> /=; auto.
+Qed.
+
+Lemma firstn_firstn_firstn {A} (l : list A) n : firstn n (firstn (S n) l) = firstn n l.
+Proof.
+  induction l in n |- *; simpl; auto.
+  destruct n=> /=; auto. now rewrite IHl.
+Qed.
+
 Lemma decompose_app_rec_inv' f l hd args :
   decompose_app_rec f l = (hd, args) ->
   ∑ n, ~~ isApp hd /\ l = skipn n args /\ f = mkApps hd (firstn n args).
@@ -1015,3 +1097,80 @@ Coercion fst_ctx : global_env_ext >-> global_env.
 
 Definition empty_ext (Σ : global_env) : global_env_ext
   := (Σ, Monomorphic_ctx ContextSet.empty).
+
+From MetaCoq.Checker Require Import uGraph.
+
+Lemma map_option_out_mapi :
+  forall {A B} (l : list A) (l' : list B) f P,
+    map_option_out (mapi f l) = Some l' ->
+    Alli (fun i x => uGraph.on_Some_or_None P (f i x)) 0 l ->
+    All P l'.
+Proof.
+  intros A B l l' f P.
+  unfold mapi. generalize 0.
+  induction l in l' |- *; simpl; intro n.
+  - inversion 1; constructor.
+  - case_eq (f n a); [|discriminate].
+    intros b Hb.
+    case_eq (map_option_out (mapi_rec f l (S n))); [|discriminate].
+    intros l0 Hl0 HH0 HH1.
+    inversion HH0; subst; clear HH0.
+    inversion HH1; subst.
+    constructor.
+    + now rewrite Hb in H0.
+    + eapply IHl; eauto.
+Qed.
+
+(* todo: move *)
+Lemma Alli_id :
+  forall {A} {P : nat -> A -> Type} (l : list A) (n : nat),
+    (forall n x, P n x) -> Alli P n l.
+Proof.
+  intros A P l n h.
+  induction l in n |- * ; constructor ; eauto.
+Qed.
+
+Definition on_some_or_none {A} (P : A -> Type) (o : option A) :=
+  match o with
+  | Some t => P t
+  | None => True
+  end.
+
+(* todo: move *)
+Lemma map_option_out_All {A} P (l : list (option A)) l' :
+  (All (on_some_or_none P) l) ->
+  map_option_out l = Some l' ->
+  All P l'.
+Proof.
+  induction 1 in l' |- *; cbn; inversion 1; subst; try constructor.
+  destruct x; [|discriminate].
+  case_eq (map_option_out l); [|intro e; rewrite e in H1; discriminate].
+  intros l0 e; rewrite e in H1; inversion H1; subst.
+  constructor; auto.
+Qed.
+
+(* todo: move *)
+Lemma All_mapi {A B} P f l k :
+  Alli (fun i x => P (f i x)) k l -> All P (@mapi_rec A B f l k).
+Proof.
+  induction 1; simpl; constructor; tas.
+Qed.
+
+(* todo: move *)
+Lemma All_Alli {A} {P : A -> Type} {Q : nat -> A -> Type} {l n} :
+  All P l ->
+  (forall n x, P x -> Q n x) ->
+  Alli Q n l.
+Proof.
+  intro H. revert n. induction H; constructor; eauto.
+Qed.
+
+Lemma All2_All_left_pack {A B} {P : A -> B -> Type} {l l'} :
+  All2 P l l' -> Alli (fun i x => ∑ y, (nth_error l i = Some x /\ nth_error l' i = Some y) * P x y) 0 l.
+Proof.
+  intros HF. induction HF; constructor; intuition eauto.
+  exists y; intuition eauto. clear -IHHF.
+  revert IHHF. generalize l at 1 3. intros. apply Alli_shift.
+  now simpl.
+Qed.
+

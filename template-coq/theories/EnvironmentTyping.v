@@ -513,7 +513,7 @@ Module DeclarationTyping (T : Term) (E : EnvironmentSig T)
   Proof.
     intros HP HPQ. revert HP; induction Δ in Γ, HPQ |- *; simpl; auto.
     destruct a as [na [b|] ty]; simpl; auto.
-    intros. intuition auto.
+    intros. intuition auto. intuition auto.
   Qed.
 
   (** This predicate enforces that there exists typing derivations for every typable term in env. *)

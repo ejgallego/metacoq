@@ -1228,3 +1228,72 @@ Lemma weakening_length {cf:checker_flags} Σ Γ Γ' t T n :
   Σ ;;; Γ |- t : T ->
   Σ ;;; Γ ,,, Γ' |- (lift0 n) t : (lift0 n) T.
 Proof. intros wfΣ ->; now apply weakening. Qed.
+
+
+Lemma weaken_wf_local {cf:checker_flags} {Σ Γ } Δ : 
+  wf Σ.1 -> 
+  wf_local Σ Δ ->
+  wf_local Σ Γ -> wf_local Σ (Δ ,,, Γ).
+Proof.
+  intros wfΣ wfΔ. 
+  induction 1. auto. 
+  - simpl.
+    constructor; auto. red.
+    destruct t0.
+    epose proof (weakening_typing Σ [] Γ Δ t wfΣ).
+    rewrite !app_context_nil_l in X0.
+    specialize (X0 X).
+    forward X0.
+    rewrite closed_ctx_lift //.
+    apply (closed_wf_local _ _ wfΣ X).
+    specialize (X0 _ t0).
+    exists x. rewrite closed_ctx_lift // in X0; eauto using typing_wf_local, closed_wf_local.
+    eapply PCUICClosed.typecheck_closed in t0 as [_ closed]; auto.
+    move/andP: closed => [ct cT].
+    rewrite !lift_closed // in X0.
+  - simpl.
+    constructor; auto; red.
+    * destruct t0.
+      epose proof (weakening_typing Σ [] Γ Δ t wfΣ).
+      rewrite !app_context_nil_l in X0.
+      specialize (X0 X).
+      forward X0.
+      rewrite closed_ctx_lift //.
+      apply (closed_wf_local _ _ wfΣ X).
+      specialize (X0 _ t0).
+      exists x. rewrite closed_ctx_lift // in X0; eauto using typing_wf_local, closed_wf_local.
+      eapply PCUICClosed.typecheck_closed in t0 as [_ closed]; auto.
+      move /andP: closed => [ct cT].
+      rewrite !lift_closed // in X0.
+    * epose proof (weakening_typing Σ [] Γ Δ b wfΣ).
+      rewrite !app_context_nil_l in X0.
+      specialize (X0 X).
+      forward X0.
+      rewrite closed_ctx_lift //.
+      apply (closed_wf_local _ _ wfΣ X).
+      specialize (X0 _ t1).
+      rewrite closed_ctx_lift // in X0; eauto using typing_wf_local, closed_wf_local.
+      eapply PCUICClosed.typecheck_closed in t1 as [_ closed]; auto.
+      move/andP: closed => [ct cT].
+      rewrite !lift_closed // in X0.
+Qed.
+
+Lemma weaken_ctx {cf:checker_flags} {Σ Γ t T} Δ : 
+  wf Σ.1 -> wf_local Σ Δ ->
+  Σ ;;; Γ |- t : T ->
+  Σ ;;; Δ ,,, Γ |- t : T.
+Proof.
+  intros wfΣ wfΔ ty.
+  epose proof (weakening_typing Σ [] Γ Δ t wfΣ).
+  rewrite !app_context_nil_l in X.
+  forward X by eauto using typing_wf_local.
+  pose proof (typing_wf_local ty).
+  pose proof (closed_wf_local _ _ wfΣ (typing_wf_local ty)).
+  forward X. rewrite closed_ctx_lift //.
+  now apply weaken_wf_local.
+  specialize (X _ ty).
+  eapply PCUICClosed.typecheck_closed in ty as [_ closed]; auto.
+  move/andP: closed => [ct cT].
+  rewrite !lift_closed // in X.
+  now rewrite closed_ctx_lift in X.
+Qed.
