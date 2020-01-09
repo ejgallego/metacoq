@@ -14,6 +14,8 @@ Require Import Equations.Prop.DepElim.
 
   [weakening_*] proves weakening of typing, reduction etc... w.r.t. the *local* environment. *)
 
+Derive Signature for Ast.wf Forall.
+
 Set Asymmetric Patterns.
 Generalizable Variables Σ Γ t T.
 
