@@ -174,6 +174,7 @@ Module TemplateTerm <: Term.
   Definition tRel := tRel.
   Definition tSort := tSort.
   Definition tProd := tProd.
+  Definition tLambda := tLambda.
   Definition tLetIn := tLetIn.
   Definition tInd := tInd.
 

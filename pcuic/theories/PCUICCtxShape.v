@@ -1,3 +1,22 @@
+From Coq Require Import Bool String List Program BinPos Compare_dec Arith Lia
+     Classes.CRelationClasses ProofIrrelevance.
+From MetaCoq.Template Require Import config Universes monad_utils utils BasicAst
+     AstUtils UnivSubst.
+From MetaCoq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICInduction
+     PCUICReflect PCUICLiftSubst PCUICUnivSubst PCUICTyping
+     PCUICCumulativity PCUICSR PCUICPosition PCUICEquality PCUICNameless
+     PCUICAlpha PCUICNormal PCUICInversion PCUICCumulativity PCUICReduction
+     PCUICConfluence PCUICConversion PCUICContextConversion PCUICValidity
+     PCUICParallelReductionConfluence PCUICWeakeningEnv
+     PCUICClosed PCUICPrincipality PCUICSubstitution
+     PCUICWeakening PCUICGeneration PCUICUtils.
+
+From Equations Require Import Equations.
+
+Require Import Equations.Prop.DepElim.
+Require Import Equations.Type.Relation_Properties.
+Require Import ssreflect ssrbool.
+
 Definition same_shape (d d' : context_decl) := 
   match decl_body d, decl_body d' with
   | None, None => True
@@ -48,7 +67,7 @@ Proof.
     now eexists (subst0 l _).
   - destruct pars; try discriminate.
     simpl in Hpars. rewrite context_assumptions_app in Hpars.
-    simpl in Hpars. elimtype False. omega.
+    simpl in Hpars. elimtype False. lia.
     simpl in Hpars. rewrite context_assumptions_app in Hpars.
     rewrite Nat.add_1_r in Hpars. noconf Hpars.
     simpl in H.

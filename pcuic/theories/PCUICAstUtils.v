@@ -43,33 +43,6 @@ Fixpoint string_of_term (t : term) :=
   end.
 Local Close Scope string_scope.
 
-(** Make a lambda/let-in string of abstractions from a context [Γ], ending with term [t]. *)
-
-Definition mkLambda_or_LetIn d t :=
-  match d.(decl_body) with
-  | None => tLambda d.(decl_name) d.(decl_type) t
-  | Some b => tLetIn d.(decl_name) b d.(decl_type) t
-  end.
-
-Definition it_mkLambda_or_LetIn (l : context) (t : term) :=
-  List.fold_left (fun acc d => mkLambda_or_LetIn d acc) l t.
-
-(** Make a prod/let-in string of abstractions from a context [Γ], ending with term [t]. *)
-
-Definition mkProd_or_LetIn d t :=
-  match d.(decl_body) with
-  | None => tProd d.(decl_name) d.(decl_type) t
-  | Some b => tLetIn d.(decl_name) b d.(decl_type) t
-  end.
-
-Definition it_mkProd_or_LetIn (l : context) (t : term) :=
-  List.fold_left (fun acc d => mkProd_or_LetIn d acc) l t.
-
-Definition map_decl f (d : context_decl) :=
-  {| decl_name := d.(decl_name);
-     decl_body := option_map f d.(decl_body);
-     decl_type := f d.(decl_type) |}.
-
 Lemma map_decl_type f decl : f (decl_type decl) = decl_type (map_decl f decl).
 Proof. destruct decl; reflexivity. Qed.
 
@@ -85,14 +58,6 @@ Lemma option_map_decl_type_map_decl f x :
   option_map decl_type (option_map (map_decl f) x) =
   option_map f (option_map decl_type x).
 Proof. destruct x; reflexivity. Qed.
-
-Definition map_context f c :=
-  List.map (map_decl f) c.
-
-Definition map_constant_body f decl :=
-  {| cst_type := f decl.(cst_type);
-     cst_body := option_map f decl.(cst_body);
-     cst_universes := decl.(cst_universes) |}.
 
 Lemma map_cst_type f decl : f (cst_type decl) = cst_type (map_constant_body f decl).
 Proof. destruct decl; reflexivity. Qed.
@@ -110,9 +75,6 @@ Proof. destruct d; reflexivity. Qed.
 Lemma map_dbody {A B : Set} (f : A -> B) (g : A -> B) (d : def A) :
   g (dbody d) = dbody (map_def f g d).
 Proof. destruct d; reflexivity. Qed.
-
-Definition app_context (Γ Γ' : context) : context := (Γ' ++ Γ)%list.
-Notation " Γ  ,,, Γ' " := (app_context Γ Γ') (at level 25, Γ' at next level, left associativity) : pcuic.
 
 Lemma app_context_assoc Γ Γ' Γ'' : Γ ,,, (Γ' ,,, Γ'') = Γ ,,, Γ' ,,, Γ''.
 Proof. unfold app_context; now rewrite app_assoc. Qed.
@@ -303,16 +265,6 @@ Proof.
   case: x => [na [body|] ty'] /=; by rewrite IHctx' // /snoc -app_assoc.
 Qed.
 
-Fixpoint reln (l : list term) (p : nat) (Γ0 : list context_decl) {struct Γ0} : list term :=
-  match Γ0 with
-  | [] => l
-  | {| decl_body := Some _ |} :: hyps => reln l (p + 1) hyps
-  | {| decl_body := None |} :: hyps => reln (tRel p :: l) (p + 1) hyps
-  end.
-
-Definition to_extended_list_k Γ k := reln [] k Γ.
-Definition to_extended_list Γ := to_extended_list_k Γ 0.
-
 Lemma reln_list_lift_above l p Γ :
   Forall (fun x => exists n, x = tRel n /\ p <= n /\ n < p + length Γ) l ->
   Forall (fun x => exists n, x = tRel n /\ p <= n /\ n < p + length Γ) (reln l p Γ).
@@ -376,16 +328,6 @@ Proof.
   simpl. rewrite reln_alt_eq.
   now rewrite -app_assoc !app_nil_r Nat.add_1_r.
 Qed.
-
-Fixpoint context_assumptions (Γ : context) :=
-  match Γ with
-  | [] => 0
-  | d :: Γ =>
-    match d.(decl_body) with
-    | Some _ => context_assumptions Γ
-    | None => S (context_assumptions Γ)
-    end
-  end.
 
 Lemma context_assumptions_length_bound Γ : context_assumptions Γ <= #|Γ|.
 Proof.

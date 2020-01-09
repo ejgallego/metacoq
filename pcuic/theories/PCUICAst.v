@@ -126,6 +126,7 @@ Record mutual_inductive_entry := {
     Definition tRel := tRel.
     Definition tSort := tSort.
     Definition tProd := tProd.
+    Definition tLambda := tLambda.
     Definition tLetIn := tLetIn.
     Definition tInd := tInd.
 
