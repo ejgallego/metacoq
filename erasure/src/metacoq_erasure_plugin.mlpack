@@ -14,14 +14,12 @@ Relation
 Relation_Properties
 PCUICAst
 PCUICAstUtils
-PCUICInduction
 PCUICUnivSubst
 PCUICLiftSubst
 EqDecInstances
 PCUICReflect
 PCUICEquality
 PCUICTyping
-PCUICInduction
 PCUICReduction
 PCUICNormal
 PCUICPosition
