@@ -17,6 +17,8 @@ Require Import Equations.Prop.DepElim.
 Require Import Equations.Type.Relation_Properties.
 Require Import ssreflect ssrbool.
 
+Derive Signature for context_subst.
+
 Lemma ctx_length_ind (P : context -> Type) (p0 : P [])
   (pS : forall d Γ, (forall Γ', #|Γ'| <= #|Γ|  -> P Γ') -> P (d :: Γ)) 
   Γ : P Γ.

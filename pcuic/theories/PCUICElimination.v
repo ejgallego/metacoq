@@ -165,15 +165,8 @@ Lemma tCase_length_branch_inv `{cf : checker_flags} (Σ : global_env_ext) Γ ind
   nth_error brs n = Some (m, t) ->
   (#|args| = npar + m)%nat.
 Proof.
-  intros. eapply inversion_Case in X0 as (u' & args' & mdecl' & idecl' & pty' & indctx' & pctx' & ps' & btys' & ? & ? & ? & ? & ? & ? & ? & ? & ?); eauto.
-  subst. unfold types_of_case in *.
-  destruct ?; try congruence.
-  destruct ?; try congruence.
-  destruct ?; try congruence.
-  destruct ?; try congruence.
-  destruct ?; try congruence.
-  destruct ?; try congruence. inversion e0. subst. clear e0. 
-  
+  intros. eapply inversion_Case in X0 as (u' & args' & mdecl' & idecl' & ps' & pty' & btys' & ? & ? & ? & ? & ? & ? & ? & ? & ?); eauto.
+  subst. unfold build_case_predicate_type  in *.
 Admitted.
 
 Section no_prop_leq_type.

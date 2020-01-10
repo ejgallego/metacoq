@@ -1275,7 +1275,7 @@ Proof.
   rewrite -{3}H. now rewrite simpl_subst_k.
 Qed.
 
-Require Import PCUICReduction.
+From MetaCoq.PCUIC Require Import PCUICReduction.
 
 Lemma substitution_let_red `{cf : checker_flags} (Σ : global_env_ext) Γ Δ Γ' s M N :
   wf Σ -> subslet Σ Γ s Δ -> wf_local Σ Γ ->
@@ -2487,7 +2487,7 @@ Proof.
   simpl in H; noconf H.
   simpl in *. constructor; auto. red. simpl. rewrite Nat.add_0_r.
   destruct l as [s' Hs].
-  eapply substitution in Hs; eauto. simpl in Hs; eexists; eauto.
+  eapply substitution in Hs; eauto.
   simpl. rewrite Nat.add_0_r.
   eapply substitution in l0; eauto.
   simpl.

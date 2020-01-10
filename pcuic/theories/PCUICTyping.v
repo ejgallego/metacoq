@@ -991,7 +991,6 @@ Proof.
     pose (typing_size_pos l0).
     intuition eauto.
     all: try lia.
-    auto with arith.
 Qed.
 
 Derive Signature for Alli.
