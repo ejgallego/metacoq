@@ -95,6 +95,16 @@ Proof.
     + destruct b. eapply cumul_trans; eauto.
 Qed.
 
+(* TODO *)
+(*Lemma build_caase_predicate_type_spec {cf:checker_flags} Σ Γ ind u npar p c args :
+    forall mdecl idecl (isdecl : declared_inductive Σ.1 mdecl ind idecl),
+    wf Σ.1 ->
+    mdecl.(ind_npars) = npar ->
+    let params := List.firstn npar args in
+    forall ps pty, build_case_predicate_type ind mdecl idecl params u ps =
+                Some pty ->                
+    pty = it_mkProd_or_LetIn (subst_context params ) (tSort ps)*)
+
 Lemma type_Case_valid_btys {cf:checker_flags} Σ Γ ind u npar p c args :
     forall mdecl idecl (isdecl : declared_inductive Σ.1 mdecl ind idecl),
     wf Σ.1 ->
@@ -109,9 +119,8 @@ Lemma type_Case_valid_btys {cf:checker_flags} Σ Γ ind u npar p c args :
                 Some btys ->
     All (fun x => Σ ;;; Γ |- snd x : tSort ps) btys.
 Proof.
-(*
-intros mdecl idecl isdecl wfΣ H0 pars ps pty X indctx pctx ps btys toc car cty.
-  apply types_of_case_spec in toc.
+  intros mdecl idecl isdecl wfΣ H0 pars ps pty X typ Hps tyc btys brtys.
+(* apply types_of_case_spec in toc.
   destruct toc as [s' [instpar [H1 H2]]].
   pose proof (PCUICClosed.destArity_spec [] pty) as Hpty; rewrite H1 in Hpty;
     cbn in Hpty; subst. clear H1.
