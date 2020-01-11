@@ -260,3 +260,13 @@ Proof.
   rewrite distr_lift_subst Nat.add_0_r.
   now constructor.
 Qed.
+
+Derive Signature for subslet.
+
+
+Lemma closedn_ctx_snoc k Γ d : closedn_ctx k (Γ ,, d) = closedn_ctx k Γ && closed_decl (#|Γ| + k) d.
+Proof.
+  rewrite /closedn_ctx !mapi_rev /= forallb_app /= /closed_decl /id /=.
+  f_equal; first now rewrite mapi_rec_Sk.
+  now rewrite Nat.sub_0_r Nat.add_comm andb_true_r.
+Qed.

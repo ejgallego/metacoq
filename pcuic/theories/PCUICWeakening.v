@@ -1236,16 +1236,15 @@ Lemma weaken_wf_local {cf:checker_flags} {Σ Γ } Δ :
   wf_local Σ Γ -> wf_local Σ (Δ ,,, Γ).
 Proof.
   intros wfΣ wfΔ. 
-  induction 1. auto. 
+  induction 1; auto. 
   - simpl.
     constructor; auto. red.
     destruct t0.
     epose proof (weakening_typing Σ [] Γ Δ t wfΣ).
     rewrite !app_context_nil_l in X0.
     specialize (X0 X).
-    forward X0.
-    rewrite closed_ctx_lift //.
-    apply (closed_wf_local _ _ wfΣ X).
+    forward X0 by rewrite closed_ctx_lift //;
+     first apply (closed_wf_local _ _ wfΣ X).
     specialize (X0 _ t0).
     exists x. rewrite closed_ctx_lift // in X0; eauto using typing_wf_local, closed_wf_local.
     eapply PCUICClosed.typecheck_closed in t0 as [_ closed]; auto.
@@ -1257,9 +1256,8 @@ Proof.
       epose proof (weakening_typing Σ [] Γ Δ t wfΣ).
       rewrite !app_context_nil_l in X0.
       specialize (X0 X).
-      forward X0.
-      rewrite closed_ctx_lift //.
-      apply (closed_wf_local _ _ wfΣ X).
+      forward X0 by rewrite closed_ctx_lift //;
+      first apply (closed_wf_local _ _ wfΣ X).
       specialize (X0 _ t0).
       exists x. rewrite closed_ctx_lift // in X0; eauto using typing_wf_local, closed_wf_local.
       eapply PCUICClosed.typecheck_closed in t0 as [_ closed]; auto.
@@ -1268,9 +1266,8 @@ Proof.
     * epose proof (weakening_typing Σ [] Γ Δ b wfΣ).
       rewrite !app_context_nil_l in X0.
       specialize (X0 X).
-      forward X0.
-      rewrite closed_ctx_lift //.
-      apply (closed_wf_local _ _ wfΣ X).
+      forward X0 by rewrite closed_ctx_lift //;
+      first apply (closed_wf_local _ _ wfΣ X).
       specialize (X0 _ t1).
       rewrite closed_ctx_lift // in X0; eauto using typing_wf_local, closed_wf_local.
       eapply PCUICClosed.typecheck_closed in t1 as [_ closed]; auto.
@@ -1289,8 +1286,8 @@ Proof.
   forward X by eauto using typing_wf_local.
   pose proof (typing_wf_local ty).
   pose proof (closed_wf_local _ _ wfΣ (typing_wf_local ty)).
-  forward X. rewrite closed_ctx_lift //.
-  now apply weaken_wf_local.
+  forward X by rewrite closed_ctx_lift //;
+  first by apply weaken_wf_local.
   specialize (X _ ty).
   eapply PCUICClosed.typecheck_closed in ty as [_ closed]; auto.
   move/andP: closed => [ct cT].

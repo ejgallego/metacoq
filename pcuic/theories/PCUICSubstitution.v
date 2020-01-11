@@ -2453,23 +2453,21 @@ Proof.
   apply mapi_ext => i x.
   destruct x as [na [b|] ty] => //.
   - rewrite /subst_decl /map_decl /=; f_equal.
-    rewrite !mapi_length. f_equal. rewrite {2}Nat.add_0_r.
-    rewrite subst_app_simpl.
-    rewrite distr_subst_rec. rewrite Nat.add_0_r; f_equal. lia.
-    rewrite map_length. f_equal. lia.
-    rewrite mapi_length.
-    rewrite subst_app_simpl.
-    rewrite {2}Nat.add_0_r.
-    rewrite distr_subst_rec. rewrite Nat.add_0_r; f_equal. lia.
-    rewrite map_length. f_equal; lia.
+    + rewrite !mapi_length. f_equal. rewrite {2}Nat.add_0_r.
+      rewrite subst_app_simpl.
+      rewrite distr_subst_rec. rewrite Nat.add_0_r; f_equal; try lia.
+      rewrite map_length. f_equal; lia.
+    + rewrite mapi_length.
+      rewrite subst_app_simpl.
+      rewrite {2}Nat.add_0_r.
+      rewrite distr_subst_rec. rewrite Nat.add_0_r; f_equal; try lia.
+      rewrite map_length. f_equal; lia.
   - rewrite /subst_decl /map_decl /=; f_equal.
     rewrite !mapi_length. rewrite {2}Nat.add_0_r.
     rewrite subst_app_simpl.
-    rewrite distr_subst_rec. rewrite Nat.add_0_r; f_equal. lia.
+    rewrite distr_subst_rec. rewrite Nat.add_0_r; f_equal; try lia.
     rewrite map_length. f_equal. lia.
 Qed.
-
-
 
 Lemma substitution_wf_local `{cf : checker_flags} (Σ : global_env_ext) Γ Γ' s Δ :
   wf Σ -> subslet Σ Γ s Γ' ->
@@ -2478,26 +2476,27 @@ Lemma substitution_wf_local `{cf : checker_flags} (Σ : global_env_ext) Γ Γ' s
 Proof.
   intros wfΣ subs wfl.
   induction Δ.
-  simpl. apply All_local_env_app in wfl as [wfl _].
-  now apply All_local_env_app in wfl as [wfl _].
+  { simpl. apply All_local_env_app in wfl as [wfl _].
+    now apply All_local_env_app in wfl as [wfl _]. }
   destruct a as [na [b|] ty]; depelim wfl; rewrite subst_context_snoc; simpl in *.
-  constructor. now apply IHΔ.
-  simpl in H; noconf H.
-  simpl in H; noconf H.
-  simpl in H; noconf H.
-  simpl in *. constructor; auto. red. simpl. rewrite Nat.add_0_r.
-  destruct l as [s' Hs].
-  eapply substitution in Hs; eauto.
-  simpl. rewrite Nat.add_0_r.
-  eapply substitution in l0; eauto.
-  simpl.
-  rewrite /subst_decl. rewrite Nat.add_0_r /map_decl /=.
-  constructor. noconf H. auto.
-  red. noconf H.
-  destruct l as [s' Hs].
-  exists s'. eapply substitution in Hs; eauto.
-  constructor. noconf H. red.
-  noconf H.
+  - constructor.
+    + now apply IHΔ.
+    + simpl in H; noconf H.
+    + simpl in H; noconf H.
+  - simpl in H; noconf H.
+    simpl in *. constructor; auto; red.
+    + simpl. rewrite Nat.add_0_r.
+      destruct l as [s' Hs].
+      eapply substitution in Hs; eauto.
+    + simpl. rewrite Nat.add_0_r.
+      eapply substitution in l0; eauto.
+  - simpl.
+    rewrite /subst_decl. rewrite Nat.add_0_r /map_decl /=.
+    constructor; noconf H; auto.
+    red.
+    destruct l as [s' Hs].
+    exists s'. eapply substitution in Hs; eauto.
+  - constructor; noconf H.
 Qed.
 
 Lemma subst_app_context s s' Γ : subst_context (s ++ s') 0 Γ = subst_context s 0 (subst_context s' #|s| Γ).
@@ -2505,11 +2504,11 @@ Proof.
   induction Γ; simpl; auto.
   rewrite !subst_context_snoc /= /subst_decl /map_decl /=. simpl.
   rewrite IHΓ. f_equal. f_equal.
-  destruct a as [na [b|] ty]; simpl; auto.
-  f_equal. rewrite subst_context_length Nat.add_0_r.
-  now rewrite subst_app_simpl.
-  rewrite subst_context_length Nat.add_0_r.
-  now rewrite subst_app_simpl.
+  - destruct a as [na [b|] ty]; simpl; auto.
+    f_equal. rewrite subst_context_length Nat.add_0_r.
+    now rewrite subst_app_simpl.
+  - rewrite subst_context_length Nat.add_0_r.
+    now rewrite subst_app_simpl.
 Qed.
 
 Lemma context_assumptions_subst s n Γ : 
