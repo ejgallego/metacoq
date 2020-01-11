@@ -1294,3 +1294,12 @@ Proof.
   rewrite !lift_closed // in X.
   now rewrite closed_ctx_lift in X.
 Qed.
+
+Lemma weakening_gen : forall (cf : checker_flags) (Σ : global_env × universes_decl)
+  (Γ Γ' : context) (t T : term) n, n = #|Γ'| ->
+  wf Σ.1 ->
+  wf_local Σ (Γ ,,, Γ') ->
+  Σ;;; Γ |- t : T -> Σ;;; Γ ,,, Γ' |- (lift0 n) t : (lift0 n) T.
+Proof.
+  intros ; subst n; now apply weakening.
+Qed.

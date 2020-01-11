@@ -4,7 +4,7 @@ From MetaCoq.Template Require Import config Universes monad_utils utils BasicAst
      AstUtils UnivSubst.
 From MetaCoq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICInduction
      PCUICReflect PCUICLiftSubst PCUICUnivSubst PCUICTyping
-     PCUICCumulativity PCUICSR PCUICPosition PCUICEquality PCUICNameless
+     PCUICCumulativity PCUICPosition PCUICEquality PCUICNameless
      PCUICAlpha PCUICNormal PCUICInversion PCUICCumulativity PCUICReduction
      PCUICConfluence PCUICConversion PCUICContextConversion PCUICValidity
      PCUICParallelReductionConfluence PCUICWeakeningEnv
@@ -263,10 +263,107 @@ Qed.
 
 Derive Signature for subslet.
 
-
 Lemma closedn_ctx_snoc k Γ d : closedn_ctx k (Γ ,, d) = closedn_ctx k Γ && closed_decl (#|Γ| + k) d.
 Proof.
   rewrite /closedn_ctx !mapi_rev /= forallb_app /= /closed_decl /id /=.
   f_equal; first now rewrite mapi_rec_Sk.
   now rewrite Nat.sub_0_r Nat.add_comm andb_true_r.
+Qed.
+
+Lemma type_local_ctx_wf_local {cf:checker_flags} Σ Γ Δ s : 
+  wf_local Σ Γ ->
+  type_local_ctx (lift_typing typing) Σ Γ Δ s ->
+  wf_local Σ (Γ ,,, Δ).
+Proof.
+  induction Δ; simpl; auto.
+  destruct a as [na [b|] ty];
+  intros wfΓ wfctx; constructor; intuition auto. exists s; auto.
+Qed.
+
+Lemma instantiate_minductive {cf:checker_flags} Σ ind mdecl u Γ t T :
+  wf Σ.1 ->
+  declared_minductive Σ.1 ind mdecl ->
+  consistent_instance_ext Σ (ind_universes mdecl) u ->
+  (Σ.1, ind_universes mdecl) ;;; Γ |- t : T ->
+  Σ ;;; subst_instance_context u Γ |- subst_instance_constr u t : subst_instance_constr u T.
+Proof.
+  intros wfΣ isdecl Hu Ht.
+  red in isdecl. eapply PCUICUnivSubstitution.typing_subst_instance_decl in isdecl; eauto.
+Qed.
+
+Lemma type_local_ctx_instantiate {cf:checker_flags} Σ ind mdecl Γ Δ u s : 
+  wf Σ.1 ->
+  declared_minductive Σ.1 ind mdecl ->
+  type_local_ctx (lift_typing typing) (Σ.1, ind_universes mdecl) Γ Δ s ->
+  consistent_instance_ext Σ (ind_universes mdecl) u ->
+  type_local_ctx (lift_typing typing) Σ (subst_instance_context u Γ) (subst_instance_context u Δ) (subst_instance_univ u s).
+Proof.
+  intros Hctx Hu.
+  induction Δ; simpl in *; intuition auto.
+  destruct a as [na [b|] ty]; simpl; intuition auto.
+  - destruct a0.
+    exists (subst_instance_univ u x).
+    eapply instantiate_minductive in t; eauto.
+    now rewrite PCUICUnivSubstitution.subst_instance_context_app in t.
+  - eapply instantiate_minductive in b1; eauto.
+    now rewrite PCUICUnivSubstitution.subst_instance_context_app in b1.
+  - eapply instantiate_minductive in b; eauto.
+    now rewrite PCUICUnivSubstitution.subst_instance_context_app in b.
+Qed.
+
+Lemma wf_local_instantiate {cf:checker_flags} Σ (decl : global_decl) Γ u c : 
+  wf Σ.1 ->
+  lookup_env Σ.1 c = Some decl ->
+  consistent_instance_ext Σ (universes_decl_of_decl decl) u ->
+  wf_local (Σ.1, universes_decl_of_decl decl) Γ -> 
+  wf_local Σ (subst_instance_context u Γ).
+Proof.
+  intros wfΣ Hdecl Huniv wf.
+  epose proof (type_Sort _ _ Level.prop wf) as ty. forward ty.
+  - apply prop_global_ext_levels.
+  - eapply PCUICUnivSubstitution.typing_subst_instance_decl in ty;   
+    eauto using typing_wf_local.
+Qed.
+
+Lemma subst_type_local_ctx {cf:checker_flags} Σ Γ Δ Δ' s ctxs : 
+  wf Σ.1 ->
+  wf_local Σ (Γ ,,, Δ) ->
+  type_local_ctx (lift_typing typing) Σ (Γ ,,, Δ) Δ' ctxs ->
+  subslet Σ Γ s Δ ->
+  type_local_ctx (lift_typing typing) Σ Γ (subst_context s 0 Δ') ctxs.
+Proof.
+  induction Δ'; simpl; auto.
+  destruct a as [na [b|] ty]; simpl; intuition auto.
+  + destruct a0; simpl; rewrite subst_context_snoc /= /subst_decl /map_decl /= Nat.add_0_r. 
+    intuition auto.
+    - exists x; auto.
+      eapply substitution in t; eauto.
+      eapply type_local_ctx_wf_local in a; eauto.
+      eapply substitution_wf_local in a; eauto.
+    - eapply substitution in b1; eauto.
+      eapply type_local_ctx_wf_local in a; eauto.
+      eapply substitution_wf_local in a; eauto.
+  + rewrite subst_context_snoc /= /subst_decl /map_decl /= Nat.add_0_r.
+      intuition auto.
+      eapply substitution in b; eauto.
+      eapply type_local_ctx_wf_local in a; eauto.
+      eapply substitution_wf_local in a; eauto.
+Qed.
+
+Lemma weaken_type_local_ctx {cf:checker_flags} Σ Γ Γ' Δ ctxs : 
+  wf Σ.1 ->
+  wf_local Σ Γ ->
+  type_local_ctx (lift_typing typing) Σ Γ' Δ ctxs ->
+  type_local_ctx (lift_typing typing) Σ (Γ ,,, Γ') Δ ctxs.
+Proof.
+  induction Δ; simpl; auto.
+  destruct a as [na [b|] ty]; simpl; intuition auto.
+  - destruct a0; simpl.
+    exists x; auto.
+    rewrite -app_context_assoc.
+    eapply (weaken_ctx Γ); auto.
+  - rewrite -app_context_assoc.
+    eapply (weaken_ctx Γ); auto.
+  - rewrite -app_context_assoc.
+    eapply (weaken_ctx Γ); auto.
 Qed.

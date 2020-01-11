@@ -4,7 +4,7 @@ From MetaCoq.Template Require Import config Universes monad_utils utils BasicAst
      AstUtils UnivSubst.
 From MetaCoq.PCUIC Require Import PCUICAst PCUICAstUtils PCUICInduction
      PCUICReflect PCUICLiftSubst PCUICUnivSubst PCUICTyping
-     PCUICCumulativity PCUICSR PCUICPosition PCUICEquality PCUICNameless
+     PCUICCumulativity PCUICPosition PCUICEquality PCUICNameless
      PCUICAlpha PCUICNormal PCUICInversion PCUICCumulativity PCUICReduction
      PCUICConfluence PCUICConversion PCUICContextConversion PCUICValidity
      PCUICParallelReductionConfluence PCUICWeakeningEnv
@@ -80,4 +80,16 @@ Proof.
     simpl in Hpars. rewrite Nat.add_0_r in Hpars. simpl.
     rewrite it_mkProd_or_LetIn_app.
     simpl. apply IHHctx. auto.
+Qed.
+
+Lemma reln_length Γ Γ' n : #|reln Γ n Γ'| = #|Γ| + context_assumptions Γ'.
+Proof.
+  induction Γ' in n, Γ |- *; simpl; auto.
+  destruct a as [? [b|] ?]; simpl; auto.
+  rewrite Nat.add_1_r. simpl. rewrite IHΓ' => /= //.
+Qed.
+
+Lemma to_extended_list_k_length Γ n : #|to_extended_list_k Γ n| = context_assumptions Γ.
+Proof.
+  now rewrite /to_extended_list_k reln_length.
 Qed.
