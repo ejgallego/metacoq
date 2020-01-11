@@ -104,7 +104,7 @@ Qed.
     forall ps pty, build_case_predicate_type ind mdecl idecl params u ps =
                 Some pty ->                
     pty = it_mkProd_or_LetIn (subst_context params ) (tSort ps)*)
-
+(*
 Lemma type_Case_valid_btys {cf:checker_flags} Σ Γ ind u npar p c args :
     forall mdecl idecl (isdecl : declared_inductive Σ.1 mdecl ind idecl),
     wf Σ.1 ->
@@ -117,25 +117,29 @@ Lemma type_Case_valid_btys {cf:checker_flags} Σ Γ ind u npar p c args :
     Σ ;;; Γ |- c : mkApps (tInd ind u) args ->
     forall btys, map_option_out (build_branches_type ind mdecl idecl params u p) =
                 Some btys ->
-    All (fun x => Σ ;;; Γ |- snd x : tSort ps) btys.
+    All (fun br => Σ ;;; Γ |- br.2 : tSort ps) btys.
 Proof.
   intros mdecl idecl isdecl wfΣ H0 pars ps pty X typ Hps tyc btys brtys.
-(* apply types_of_case_spec in toc.
-  destruct toc as [s' [instpar [H1 H2]]].
-  pose proof (PCUICClosed.destArity_spec [] pty) as Hpty; rewrite H1 in Hpty;
-    cbn in Hpty; subst. clear H1.
+  unfold build_case_predicate_type in X.
+  destruct instantiate_params eqn:Heq; [|simpl; discriminate].
+  simpl monad_utils.bind in X.
+  pose proof isdecl as isdecl'.
+  apply PCUICWeakeningEnv.on_declared_inductive in isdecl' as [oind oc]; auto.
+  rewrite oc.(ind_arity_eq) in Heq.
+  pose proof (PCUICClosed.destArity_spec [] t) as Hpty.
+  move: X Hpty. destruct destArity eqn:da => // [=] Hpty. subst pty.
+
+
   unfold build_branches_type in H2.
   eapply map_option_out_All; tea. clear H2.
   apply All_mapi.
-  pose proof isdecl as isdecl'.
-  apply PCUICWeakeningEnv.on_declared_inductive in isdecl' as [oind oc]; auto.
   pose proof oc.(onConstructors) as oc'.
   eapply Alli_impl. eapply All2_All_left_pack. tea. cbn.
   intros n [[id ct] k] [cs [Hnth [Hct1 Hct2]]]; cbn in *.
   case_eq (instantiate_params (subst_instance_context u (ind_params mdecl)) pars
              ((subst0 (inds (inductive_mind ind) u (ind_bodies mdecl)))
                 (subst_instance_constr u ct))); [|simpl; trivial].
-  intros ct' Hct'.
+  intros ct' Hct'. 
   case_eq (decompose_prod_assum [] ct'); intros sign ccl e1.
   case_eq (chop (ind_npars mdecl) (decompose_app ccl).2);
   intros paramrels args0 e2; cbn.
@@ -325,8 +329,9 @@ Proof.
       left; exists [], ps; intuition auto.
       now apply type_local_ctx_wf_local in X0.
       reflexivity.
-      *)
+
 Admitted.
+*)
 
 (** The subject reduction property of the system: *)
 
