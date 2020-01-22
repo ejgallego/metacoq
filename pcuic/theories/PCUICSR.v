@@ -491,16 +491,16 @@ Lemma branch_type_spec {cf:checker_flags} Σ ind mdecl idecl cdecl pars u p c na
   let indsubst := (inds (inductive_mind ind) u (ind_bodies mdecl)) in
   let nargs' := #|cshape.(cshape_args)| in
   let npars := #|ind_params mdecl| in
+  let substargs := (subst_context parsubst 0 
+    (subst_context indsubst npars (map_context (subst_instance_constr u) cshape.(cshape_args)))) in
   nargs = context_assumptions cshape.(cshape_args) /\
   bty = 
-  it_mkProd_or_LetIn 
-    (subst_context parsubst 0 
-      (subst_context indsubst npars (map_context (subst_instance_constr u) cshape.(cshape_args))))
+  it_mkProd_or_LetIn substargs
     (mkApps (lift0 nargs' p)
       (map (subst parsubst nargs' ∘ subst indsubst (nargs' + npars) ∘ subst_instance_constr u) cshape.(cshape_indices) ++ 
        [mkApps (tConstruct ind c u)
          (map (lift0 nargs') pars ++         
-          to_extended_list cshape.(cshape_args))])).
+          to_extended_list substargs)])).
 Proof.
   move=> decli onmib [] indices ps aeq onAr indsorts onC _ inds.
   intros cs onc brty parsubst Hpars cshape' indsubst nargs' na.
@@ -565,9 +565,6 @@ Proof.
   rewrite -map_map_compose.
   rewrite -to_extended_list_k_map_subst. rewrite subst_instance_context_length; lia.
   now rewrite (subst_to_extended_list_k _ _ pars).
-  unfold PCUICAst.to_extended_list.
-  rewrite !to_extended_list_k_subst.
-  apply PCUICSubstitution.map_subst_instance_constr_to_extended_list_k.
 Qed.
 
 Lemma isWAT_tLetIn_red {cf:checker_flags} {Σ : global_env_ext} (HΣ' : wf Σ)
@@ -601,6 +598,20 @@ Proof.
       destruct H as [na' [d' [ty' [b' [[[reds ?] ?] ?]]]]].
       eapply invert_red_sort in reds. discriminate.
       now repeat constructor.
+Qed.
+
+Lemma isWAT_tLetIn_dom {cf:checker_flags} {Σ : global_env_ext} (HΣ' : wf Σ)
+      {Γ} (HΓ : wf_local Σ Γ) {na t A B}
+  : isWfArity_or_Type Σ Γ (tLetIn na t A B) -> Σ ;;; Γ |- t : A.
+Proof.
+  intro HH.
+  destruct HH as [[ctx [s [H1 H2]]]|[s H]].
+  + cbn in H1. apply destArity_app_Some in H1.
+    destruct H1 as [ctx' [H1 HH]]; subst ctx.
+    rewrite app_context_assoc in H2.
+    eapply All_local_env_app in H2 as [wf _].
+    now inv wf.
+  + apply inversion_LetIn in H; tas. now destruct H as [s1 [A' [HA [Ht [HB H]]]]].
 Qed.
 
 Lemma typing_spine_it_mkProd_or_LetIn_gen {cf:checker_flags} Σ Γ Δ Δ' T args s s' args' T' : 
@@ -762,80 +773,6 @@ Proof.
     etransitivity; eauto.
 Qed.
 
-Lemma mkApps_ind_typing_spine {cf:checker_flags} Σ Γ Γ' ind i
-  inst ind' i' args args' : 
-  wf Σ.1 ->
-  wf_local Σ Γ ->
-  isWfArity_or_Type Σ Γ (it_mkProd_or_LetIn Γ' (mkApps (tInd ind i) args)) ->
-  typing_spine Σ Γ (it_mkProd_or_LetIn Γ' (mkApps (tInd ind i) args)) inst 
-    (mkApps (tInd ind' i') args') ->
-  #|inst| = context_assumptions Γ' /\ ind = ind'.
-Proof.
-  intros wfΣ wfΓ; revert args args' ind i ind' i' inst.
-  generalize (le_n #|Γ'|).
-  generalize (#|Γ'|) at 2.
-  induction n in Γ' |- *. 
-  destruct Γ' using rev_ind; try clear IHΓ'; simpl; intros len args args' ind i ind' i' inst wat Hsp.
-  - depelim Hsp. intuition auto.
-    eapply invert_cumul_ind_l in c as [? [? [? ?]]]; auto.
-    eapply invert_red_ind in r as [? [eq ?]]. now solve_discr.
-    eapply invert_cumul_prod_r in c as [? [? [? [[? ?] ?]]]]; auto.
-    eapply invert_red_ind in r as [? [eq ?]]. now solve_discr.
-  - rewrite app_length /= in len; elimtype False; lia.
-  - intros len args args' ind i ind' i' inst wat Hsp.
-    destruct Γ' using rev_ind; try clear IHΓ'.
-    -- depelim Hsp. intuition auto.
-      eapply invert_cumul_ind_l in c as [? [? [? ?]]]; auto.
-      eapply invert_red_ind in r as [? [eq ?]]. now solve_discr.
-      eapply invert_cumul_prod_r in c as [? [? [? [[? ?] ?]]]]; auto.
-      eapply invert_red_ind in r as [? [eq ?]]. now solve_discr.
-    -- rewrite app_length /= in len.
-      rewrite it_mkProd_or_LetIn_app in Hsp.
-      destruct x as [na [b|] ty]; simpl in *; rewrite /mkProd_or_LetIn /= in Hsp.
-      + rewrite context_assumptions_app /= Nat.add_0_r.
-        eapply typing_spine_letin_inv in Hsp; auto.
-        rewrite /subst1 subst_it_mkProd_or_LetIn /= in Hsp.
-        specialize (IHn (subst_context [b] 0 l)).
-        forward IHn by rewrite subst_context_length; lia.
-        rewrite subst_mkApps Nat.add_0_r in Hsp.
-        specialize (IHn (map (subst [b] #|l|) args) args' ind i ind' i' inst).
-        forward IHn. {
-          move: wat; rewrite it_mkProd_or_LetIn_app /= /mkProd_or_LetIn /= => wat.
-          eapply isWAT_tLetIn_red in wat; auto.
-          now rewrite /subst1 subst_it_mkProd_or_LetIn subst_mkApps Nat.add_0_r
-          in wat. }
-        now rewrite context_assumptions_subst in IHn.
-      + rewrite context_assumptions_app /=.
-        pose proof (typing_spine_WAT_concl Hsp).
-        depelim Hsp.
-        eapply invert_cumul_prod_l in c as [? [? [? [[? ?] ?]]]]; auto.
-        eapply invert_red_ind in r as [? [eq ?]]. now solve_discr.
-        eapply cumul_Prod_inv in c as [conva cumulB].
-        eapply (substitution_cumul0 _ _ _ _ _ _ hd) in cumulB; auto.
-        rewrite /subst1 subst_it_mkProd_or_LetIn /= in cumulB.
-        specialize (IHn (subst_context [hd] 0 l)).
-        forward IHn by rewrite subst_context_length; lia.
-        specialize (IHn (map (subst [hd] #|l|) args) args' ind i ind' i' tl). all:auto.
-        have isWATs: isWfArity_or_Type Σ Γ
-        (it_mkProd_or_LetIn (subst_context [hd] 0 l)
-           (mkApps (tInd ind i) (map (subst [hd] #|l|) args))). {
-          move: wat; rewrite it_mkProd_or_LetIn_app /= /mkProd_or_LetIn /= => wat.
-          eapply isWAT_tProd in wat; auto. destruct wat as [isty wat].
-          epose proof (isWAT_subst wfΣ (Γ:=Γ) (Δ:=[vass na ty])).
-          forward X0. constructor; auto.
-          specialize (X0 (it_mkProd_or_LetIn l (mkApps (tInd ind i) args)) [hd]).
-          forward X0. constructor. constructor. rewrite subst_empty; auto.
-          eapply isWAT_tProd in i0; auto. destruct i0. 
-          eapply type_Cumul with A; auto. now eapply conv_alt_cumul.
-          now rewrite /subst1 subst_it_mkProd_or_LetIn subst_mkApps Nat.add_0_r
-          in X0. }
-        rewrite subst_mkApps Nat.add_0_r in cumulB. simpl in *. 
-        rewrite context_assumptions_subst in IHn.
-        eapply typing_spine_strengthen in Hsp.
-        3:eapply cumulB. all:eauto.
-        intuition auto. now rewrite H; lia.
-Qed.
-
 Lemma declared_inductive_unique {Σ ind mdecl mdecl' idecl idecl'} : 
   declared_inductive Σ mdecl ind idecl ->
   declared_inductive Σ mdecl' ind idecl' ->
@@ -846,87 +783,370 @@ Proof.
   noconf eq. split; congruence.
 Qed.
 
-Lemma Construct_Ind_ind_eq {cf:checker_flags} {Σ} (wfΣ : wf Σ.1):
-  forall {Γ n i args u i' args' u' mdecl idecl},
-  Σ ;;; Γ |- mkApps (tConstruct i n u) args : mkApps (tInd i' u') args' ->
-  declared_inductive Σ.1 mdecl i idecl ->
-  (i = i') * All2 (fun par par' => Σ ;;; Γ |- par = par') 
-  (firstn mdecl.(ind_npars) args) 
-  (firstn (mdecl.(ind_npars)) args').
+Lemma declared_constructor_unique {Σ c mdecl mdecl' idecl idecl' cdecl cdecl'} : 
+  declared_constructor Σ mdecl idecl c cdecl ->
+  declared_constructor Σ mdecl' idecl' c cdecl' ->
+  (mdecl = mdecl') * (idecl = idecl') * (cdecl = cdecl').
 Proof.
-  intros Γ n i args u i' args' u' mdecl idecl h hdecl.
+  unfold declared_constructor.
+  intros [? ?] [eq ?]. destruct (declared_inductive_unique H eq).
+  subst mdecl' idecl'. rewrite H0 in H1. intuition congruence.
+Qed.
+
+Lemma subst_context_nil s n : subst_context s n [] = [].
+Proof. reflexivity. Qed.
+
+Lemma context_subst_subst Δ inst0 s Γ inst s'  :
+  context_subst Δ inst0 s ->
+  context_subst (subst_context s 0 Γ) inst s' ->
+  context_subst (Δ ,,, Γ) (inst0 ++ inst) (s' ++ s).
+Proof.
+  induction Γ in inst, s' |- *.
+  + intros HΔ Hi. depelim Hi.
+    now rewrite app_nil_r.
+  + intros H' Hsub. 
+    rewrite subst_context_snoc0 in Hsub.
+    destruct a as [na [b|] ty];
+    depelim Hsub; simpl in H; noconf H.
+    - specialize (IHΓ _ _ H' Hsub).
+      assert(#|Γ| = #|s0|) as ->.
+      { apply context_subst_length in Hsub.
+        now rewrite subst_context_length in Hsub. }
+      rewrite -(subst_app_simpl s0 s 0 b).
+      simpl. now constructor.
+    - specialize (IHΓ _ _ H' Hsub).
+      assert(#|Γ| = #|s0|).
+      { apply context_subst_length in Hsub.
+        now rewrite subst_context_length in Hsub. }
+      rewrite app_assoc /=. now constructor.
+Qed.
+
+Lemma subslet_app {cf:checker_flags} Σ Γ s s' Δ Δ' : 
+  subslet Σ Γ s (subst_context s' 0 Δ) ->
+  subslet Σ Γ s' Δ' ->
+  subslet Σ Γ (s ++ s') (Δ' ,,, Δ).
+Proof.
+  induction Δ in s, s', Δ' |- *; simpl; auto; move=> sub'.
+  - depelim sub'. auto.
+  - rewrite subst_context_snoc in sub' => sub''.
+    move:(subslet_length sub') => /=.
+    rewrite /snoc /= subst_context_length /= => Hlen.
+    destruct a as [na [b|] ty].
+    * depelim sub'; simpl in H; noconf H.
+      simpl in t0, Hlen.
+      rewrite -subst_app_simpl' /=. lia.
+      constructor. eauto.
+      now rewrite - !subst_app_simpl' in t0; try lia.
+    * rewrite /subst_decl /map_decl /snoc /= in sub'.
+      depelim sub'; simpl in H; noconf H. simpl in Hlen.
+      rewrite - !subst_app_simpl' in t0; try lia.
+      simpl; constructor; eauto.
+Qed.
+
+Lemma mkApps_ind_typing_spine {cf:checker_flags} Σ Γ Γ' ind i
+  inst ind' i' args args' : 
+  wf Σ.1 ->
+  wf_local Σ Γ ->
+  isWfArity_or_Type Σ Γ (it_mkProd_or_LetIn Γ' (mkApps (tInd ind i) args)) ->
+  typing_spine Σ Γ (it_mkProd_or_LetIn Γ' (mkApps (tInd ind i) args)) inst 
+    (mkApps (tInd ind' i') args') ->
+  ∑ instsubst, (make_context_subst (List.rev Γ') inst [] = Some instsubst) *
+  (#|inst| = context_assumptions Γ' /\ ind = ind' /\ 
+  R_universe_instance (eq_universe (global_ext_constraints Σ)) i i') *
+  All2 (fun par par' => Σ ;;; Γ |- par = par') (map (subst0 instsubst) args) args' *
+  (subslet Σ Γ instsubst Γ').
+Proof.
+  intros wfΣ wfΓ; revert args args' ind i ind' i' inst.
+  revert Γ'. refine (ctx_length_rev_ind _ _ _); simpl.
+  - intros args args' ind i ind' i' inst wat Hsp.
+    depelim Hsp.
+    eapply invert_cumul_ind_l in c as [i'' [args'' [? ?]]]; auto.
+    eapply invert_red_ind in r as [? [eq ?]]. solve_discr. exists nil.
+    intuition auto. clear i0.
+    revert args' a. clear -b wfΣ wfΓ. induction b; intros args' H; depelim H; constructor.
+    rewrite subst_empty.
+    transitivity y; auto. symmetry.
+    now eapply red_conv. now eauto.
+    eapply invert_cumul_prod_r in c as [? [? [? [[? ?] ?]]]]; auto.
+    eapply invert_red_ind in r as [? [eq ?]]. now solve_discr.
+  - intros d Γ' IH args args' ind i ind' i' inst wat Hsp.
+    rewrite it_mkProd_or_LetIn_app in Hsp.
+    destruct d as [na [b|] ty]; simpl in *; rewrite /mkProd_or_LetIn /= in Hsp.
+    + rewrite context_assumptions_app /= Nat.add_0_r.
+      eapply typing_spine_letin_inv in Hsp; auto.
+      rewrite /subst1 subst_it_mkProd_or_LetIn /= in Hsp.
+      specialize (IH (subst_context [b] 0 Γ')).
+      forward IH by rewrite subst_context_length; lia.
+      rewrite subst_mkApps Nat.add_0_r in Hsp.
+      specialize (IH (map (subst [b] #|Γ'|) args) args' ind i ind' i' inst).
+      forward IH. {
+        move: wat; rewrite it_mkProd_or_LetIn_app /= /mkProd_or_LetIn /= => wat.
+        eapply isWAT_tLetIn_red in wat; auto.
+        now rewrite /subst1 subst_it_mkProd_or_LetIn subst_mkApps Nat.add_0_r
+        in wat. }
+      rewrite context_assumptions_subst in IH.
+      intuition auto.
+      destruct X as [isub [[[Hisub Hinst] Hargs]] Hs].
+      eexists. intuition auto.
+      eapply make_context_subst_spec in Hisub.
+      eapply make_context_subst_spec_inv.
+      rewrite List.rev_app_distr. simpl.
+      rewrite List.rev_involutive.
+      eapply (context_subst_subst [{| decl_name := na; decl_body := Some b;  decl_type := ty |}] [] [b] Γ').
+      rewrite -{2}  (subst_empty 0 b). eapply context_subst_def. constructor.
+      now rewrite List.rev_involutive in Hisub.
+      rewrite map_map_compose in Hargs.
+      assert (map (subst0 isub ∘ subst [b] #|Γ'|) args = map (subst0 (isub ++ [b])) args) as <-.
+      { eapply map_ext => x. simpl.
+        assert(#|Γ'| = #|isub|).
+        { apply make_context_subst_spec in Hisub.
+          apply context_subst_length in Hisub.
+          now rewrite List.rev_involutive subst_context_length in Hisub. }
+        rewrite H0.
+        now rewrite -(subst_app_simpl isub [b] 0). }
+      exact Hargs. 
+      eapply subslet_app; eauto. rewrite -{1}(subst_empty 0 b). repeat constructor.
+      rewrite !subst_empty.
+      rewrite it_mkProd_or_LetIn_app /= /mkProd_or_LetIn /= in wat.
+      now eapply isWAT_tLetIn_dom in wat.
+    + rewrite context_assumptions_app /=.
+      pose proof (typing_spine_WAT_concl Hsp).
+      depelim Hsp.
+      eapply invert_cumul_prod_l in c as [? [? [? [[? ?] ?]]]]; auto.
+      eapply invert_red_ind in r as [? [eq ?]]. now solve_discr.
+      eapply cumul_Prod_inv in c as [conva cumulB].
+      eapply (substitution_cumul0 _ _ _ _ _ _ hd) in cumulB; auto.
+      rewrite /subst1 subst_it_mkProd_or_LetIn /= in cumulB.
+      specialize (IH (subst_context [hd] 0 Γ')).
+      forward IH by rewrite subst_context_length; lia.
+      specialize (IH (map (subst [hd] #|Γ'|) args) args' ind i ind' i' tl). all:auto.
+      have isWATs: isWfArity_or_Type Σ Γ
+      (it_mkProd_or_LetIn (subst_context [hd] 0 Γ')
+          (mkApps (tInd ind i) (map (subst [hd] #|Γ'|) args))). {
+        move: wat; rewrite it_mkProd_or_LetIn_app /= /mkProd_or_LetIn /= => wat.
+        eapply isWAT_tProd in wat; auto. destruct wat as [isty wat].
+        epose proof (isWAT_subst wfΣ (Γ:=Γ) (Δ:=[vass na ty])).
+        forward X0. constructor; auto.
+        specialize (X0 (it_mkProd_or_LetIn Γ' (mkApps (tInd ind i) args)) [hd]).
+        forward X0. constructor. constructor. rewrite subst_empty; auto.
+        eapply isWAT_tProd in i0; auto. destruct i0. 
+        eapply type_Cumul with A; auto. now eapply conv_alt_cumul.
+        now rewrite /subst1 subst_it_mkProd_or_LetIn subst_mkApps Nat.add_0_r
+        in X0. }
+      rewrite subst_mkApps Nat.add_0_r in cumulB. simpl in *. 
+      rewrite context_assumptions_subst in IH.
+      eapply typing_spine_strengthen in Hsp.
+      3:eapply cumulB. all:eauto.
+      intuition auto.
+      destruct X1 as [isub [[[Hisub [Htl [Hind Hu]]] Hargs]] Hs].
+      exists (isub ++ [hd]). rewrite List.rev_app_distr.
+      intuition auto. 2:lia.
+      * apply make_context_subst_spec_inv.
+        apply make_context_subst_spec in Hisub.
+        rewrite List.rev_app_distr !List.rev_involutive in Hisub |- *.
+        eapply (context_subst_subst [{| decl_name := na; decl_body := None; decl_type := ty |}] [hd] [hd] Γ'); auto.
+        eapply (context_subst_ass _ [] []). constructor.
+      * assert (map (subst0 isub ∘ subst [hd] #|Γ'|) args = map (subst0 (isub ++ [hd])) args) as <-.
+      { eapply map_ext => x. simpl.
+        assert(#|Γ'| = #|isub|).
+        { apply make_context_subst_spec in Hisub.
+          apply context_subst_length in Hisub.
+          now rewrite List.rev_involutive subst_context_length in Hisub. }
+        rewrite H.
+        now rewrite -(subst_app_simpl isub [hd] 0). }
+        now rewrite map_map_compose in Hargs.
+      * eapply subslet_app; auto.
+        constructor. constructor. rewrite subst_empty.
+        rewrite it_mkProd_or_LetIn_app /= /mkProd_or_LetIn /= in wat.
+        eapply isWAT_tProd in wat as [Hty _]; auto.
+        eapply type_Cumul; eauto. eapply conv_cumul.
+        now eapply conv_alt_conv.
+Qed.
+
+Lemma firstn_app_left (A : Type) (n : nat) (l1 l2 : list A) k :
+  k = #|l1| + n ->
+  firstn k (l1 ++ l2) = l1 ++ firstn n l2.
+Proof. intros ->; apply firstn_app_2.  Qed.
+
+Lemma map_subst_app_to_extended_list_k s s' ctx k  :
+  k = #|s| ->
+  map (subst0 (s ++ s')) (to_extended_list_k ctx k) = 
+  map (subst0 s') (to_extended_list_k ctx 0).
+Proof.
+  intros ->.
+  induction ctx in s, s' |- *; simpl; auto.
+  destruct a as [na [b|] ty]. simpl.
+Admitted.  
+
+Lemma map_lift0 l : map (lift0 0) l = l.
+Proof. induction l; simpl; auto. now rewrite lift0_id. Qed.
+
+Lemma map_context_length f l : #|map_context f l| = #|l|.
+Proof. now rewrite /map_context map_length. Qed.
+
+Lemma skipn_all_app_eq {A} n (l l' : list A) : n = #|l| -> skipn n (l ++ l') = l'.
+Proof.
+  move->. apply skipn_all_app.
+Qed.
+
+Hint Rewrite subst_context_length subst_instance_context_assumptions subst_instance_context_length 
+  app_context_length map_context_length map_length : len.
+
+Lemma Construct_Ind_ind_eq {cf:checker_flags} {Σ} (wfΣ : wf Σ.1):
+  forall {Γ n i args u i' args' u' mdecl idecl cdecl},
+  Σ ;;; Γ |- mkApps (tConstruct i n u) args : mkApps (tInd i' u') args' ->
+  declared_constructor Σ.1 mdecl idecl (i, n) cdecl ->
+  ∑ cs (oc : on_constructor (lift_typing typing) (Σ.1, ind_universes mdecl) mdecl (inductive_ind i) idecl cdecl cs),
+  (i = i') * 
+  (* Universe instances match *)
+  R_universe_instance (eq_universe (global_ext_constraints Σ)) u u' *
+    
+  (#|args| = (ind_npars mdecl + context_assumptions oc.2.π1.(cshape_args))%nat) *
+  ∑ parsubst argsubst, 
+    let parctx := (subst_instance_context u (ind_params mdecl)) in
+    let argctx := (subst_context parsubst 0
+    ((subst_context (inds (inductive_mind i) u mdecl.(ind_bodies)) #|ind_params mdecl|
+    (subst_instance_context u oc.2.π1.(cshape_args))))) in
+    
+    context_subst parctx (firstn (ind_npars mdecl) args) parsubst *
+    context_subst argctx (skipn (ind_npars mdecl) args) argsubst *
+    subslet Σ Γ parsubst parctx * 
+    subslet Σ Γ argsubst argctx * 
+    ∑ s, type_local_ctx (lift_typing typing) Σ Γ argctx s *
+    (** Parameters match *)
+    (All2 (fun par par' => Σ ;;; Γ |- par = par') 
+      (firstn mdecl.(ind_npars) args) 
+      (firstn mdecl.(ind_npars) args') * 
+
+    (** Indices match *)
+    All2 (fun par par' => Σ ;;; Γ |- par = par') 
+      (map (subst0 argsubst ∘ subst0 (inds (inductive_mind i) u mdecl.(ind_bodies)) ∘ (subst_instance_constr u)) 
+        oc.2.π1.(cshape_indices))
+      (skipn mdecl.(ind_npars) args')).
+
+Proof.
+  intros Γ n i args u i' args' u' mdecl idecl cdecl h declc.
+  destruct (on_declared_constructor _ declc). destruct s as [? [_ onc]].
+  exists x, onc.
   unshelve epose proof (validity _ _ _ _ _ _ h) as [_ vi']; eauto using typing_wf_local.
   eapply type_mkApps_inv in h; auto.
   destruct h as [T [U [[hC hs] hc]]].
   apply inversion_Construct in hC
-    as [mdecl' [idecl' [cdecl [hΓ [isdecl [const htc]]]]]]; auto.
+    as [mdecl' [idecl' [cdecl' [hΓ [isdecl [const htc]]]]]]; auto.
   assert (vty:=declared_constructor_valid_ty _ _ _ _ _ _ _ _ wfΣ hΓ isdecl const). 
   eapply typing_spine_strengthen in hs. 3:eapply htc. all:eauto.
   eapply typing_spine_weaken_concl in hs.
   3:{ eapply cumul_trans; eauto. } all:auto.
-  clear hc htc. 
-  destruct (on_declared_constructor _ isdecl) as [onmind [ctorsort [_ [p [cs _]]]]];
-  auto. simpl in *. destruct cs. simpl in *.
+  clear hc htc.
+  destruct (declared_constructor_unique isdecl declc) as [[? ?] ?].
+  subst mdecl' idecl' cdecl'. clear declc.
+  destruct p as [onmind onind].
+  case: onc => [p [cs' t]]  /=.
+  simpl in *. destruct cs'. simpl in *.
   unfold type_of_constructor in hs. simpl in hs.
-  destruct (declared_inductive_unique (proj1 isdecl) hdecl). subst mdecl' idecl'.
   rewrite cshape_eq in hs.  
   rewrite !subst_instance_constr_it_mkProd_or_LetIn in hs.
   rewrite !subst_it_mkProd_or_LetIn subst_instance_context_length Nat.add_0_r in hs.
   rewrite subst_instance_constr_mkApps subst_mkApps subst_instance_context_length in hs.
-  rewrite subst_inds_concl_head in hs.
-  + red in isdecl. destruct isdecl.
-    destruct H as [_ H]. now eapply nth_error_Some_length in H.
-  + destruct isdecl as [[? oni] onc].
-    rewrite -it_mkProd_or_LetIn_app in hs.
-    eapply mkApps_ind_typing_spine in hs; intuition auto.
-    rewrite it_mkProd_or_LetIn_app.
-    right. unfold type_of_constructor in vty.
-    rewrite cshape_eq in vty. move: vty.
-    rewrite !subst_instance_constr_it_mkProd_or_LetIn.
-    rewrite !subst_it_mkProd_or_LetIn subst_instance_context_length Nat.add_0_r.
-    rewrite subst_instance_constr_mkApps subst_mkApps subst_instance_context_length.
-    rewrite subst_inds_concl_head. all:simpl; auto.
-    destruct isdecl as [[? oni] onc]. now eapply nth_error_Some_length in oni.
+  assert (Hind : inductive_ind i < #|ind_bodies mdecl|).
+  { red in isdecl. destruct isdecl.
+    destruct H as [_ H]. now eapply nth_error_Some_length in H. }
+  rewrite (subst_inds_concl_head i) in hs => //.
+  destruct isdecl as [[? oni] onc'].
+  rewrite -it_mkProd_or_LetIn_app in hs.
+  assert(ind_npars mdecl = PCUICAst.context_assumptions (ind_params mdecl)).
+  { now pose (onNpars _ _ _ _ onmind). }
+  assert (closed_ctx (ind_params mdecl)).
+  { destruct onmind.
+    red in onParams. now apply closed_wf_local in onParams. }
+  eapply mkApps_ind_typing_spine in hs as [isubst [[[Hisubst [Hargslen [Hi Hu]]] Hargs] Hs]]; auto.
+  split=> //. split=> //.
+  now rewrite Hargslen context_assumptions_app !context_assumptions_subst !subst_instance_context_assumptions H0.
+  exists (skipn #|cshape_args| isubst), (firstn #|cshape_args| isubst).
+  apply make_context_subst_spec in Hisubst.
+  move: Hisubst.
+  rewrite List.rev_involutive.
+  move/context_subst_app.
+  rewrite !subst_context_length !subst_instance_context_length.
+  rewrite context_assumptions_subst subst_instance_context_assumptions -H0.
+  move=>  [argsub parsub].
+  rewrite closed_ctx_subst in parsub.
+  now rewrite closedn_subst_instance_context.
+  eapply subslet_app_inv in Hs.
+  move: Hs. autorewrite with len. intuition auto.
+  rewrite closed_ctx_subst in a => //.
+  now rewrite closedn_subst_instance_context.
+  exists x.
+  split.
+  eapply subst_type_local_ctx; eauto.
+  rewrite closed_ctx_subst => //.
+  now rewrite closedn_subst_instance_context.
+  move/onParams: onmind. rewrite /on_context.
+  pose proof (wf_local_instantiate Σ (InductiveDecl mdecl) (ind_params mdecl) u).
+  move=> H'. eapply X in H'; eauto.
+  now eapply weaken_wf_local.
+  admit.
+
+  move: (All2_firstn  _ _ _ _ _ mdecl.(ind_npars) Hargs).
+  move: (All2_skipn  _ _ _ _ _ mdecl.(ind_npars) Hargs).
+  clear Hargs.
+  rewrite !map_map_compose !map_app.
+  rewrite -map_map_compose.
+  rewrite (firstn_app_left _ 0).
+  rewrite PCUICUnivSubst.map_subst_instance_constr_to_extended_list_k.
+  rewrite -map_map_compose.
+  rewrite -to_extended_list_k_map_subst; first lia.
+  now rewrite map_length to_extended_list_k_length.
+  rewrite /= app_nil_r.
+  rewrite skipn_all_app_eq.
+  autorewrite with len. 
+  rewrite to_extended_list_k_length. lia.
+  rewrite !map_map_compose.
+
+  rewrite -(firstn_skipn #|cshape_args| isubst).
+  rewrite subst_instance_to_extended_list_k.    
+  rewrite -map_map_compose.
+  rewrite -to_extended_list_k_map_subst.
+  rewrite subst_instance_context_length. lia.
+  rewrite map_subst_app_to_extended_list_k.
+  now rewrite firstn_length_le.
+  erewrite subst_to_extended_list_k.
+  rewrite map_lift0. split. eauto.
+  rewrite closed_ctx_subst in Hasubst.
+  now rewrite closedn_subst_instance_context.
+  apply make_context_subst_spec_inv. rewrite List.rev_involutive.
+  rewrite subst_instance_context_assumptions in Hasubst.
+  now rewrite -H0 in Hasubst.
+
+
+  rewrite it_mkProd_or_LetIn_app.
+  right. unfold type_of_constructor in vty.
+  rewrite cshape_eq in vty. move: vty.
+  rewrite !subst_instance_constr_it_mkProd_or_LetIn.
+  rewrite !subst_it_mkProd_or_LetIn subst_instance_context_length Nat.add_0_r.
+  rewrite subst_instance_constr_mkApps subst_mkApps subst_instance_context_length.
+  rewrite subst_inds_concl_head. all:simpl; auto.
+Admitted.
+
+Lemma map_subst_lift_id s l : map (subst0 s ∘ lift0 #|s|) l = l.
+Proof.
+  induction l; simpl; auto.
+  rewrite -{1}(Nat.add_0_r #|s|) simpl_subst'; auto.
+  now rewrite lift0_id IHl.  
 Qed.
 
-Lemma Construct_Ind_ind_eq {cf:checker_flags} {Σ} (wfΣ : wf Σ.1):
-  forall {Γ n i args u i' args' u' mdecl idecl},
-  declared_inductive Σ.1 mdecl i idecl ->
-  Σ ;;; Γ |- mkApps (tConstruct i n u) args : mkApps (tInd i' u') args' ->
-  (i = i') * All2 (fun par par' => Σ ;;; Γ |- par = par') 
-    (firstn mdecl.(ind_npars) args) 
-    (firstn (mdecl.(ind_npars)) args').
+Lemma subslet_wf_local {cf:checker_flags} Σ Γ Δ :
+  wf_local Σ (Γ ,,, Δ) ->
+  ∑ s, type_local_ctx (lift_typing typing) Σ Γ Δ s.
 Proof.
-  intros Γ n i args u i' args' u' mdecl idecl decli h.
-  unshelve epose proof (validity _ _ _ _ _ _ h) as [_ vi']; eauto using typing_wf_local.
-  eapply type_mkApps_inv in h; auto.
-  destruct h as [T [U [[hC hs] hc]]].
-  apply inversion_Construct in hC
-    as [mdecl' [idecl' [cdecl [hΓ [isdecl [const htc]]]]]]; auto.
-  assert (vty:=declared_constructor_valid_ty _ _ _ _ _ _ _ _ wfΣ hΓ isdecl const).
-  destruct (on_declared_constructor _ isdecl) as [onmind [ctorsort [_ [p [cs _]]]]];
-  auto. simpl in *. destruct cs. simpl in *.
-  unfold type_of_constructor in htc. simpl in htc.
-  rewrite cshape_eq in htc.
-  rewrite !subst_instance_constr_it_mkProd_or_LetIn in htc.
-  rewrite !subst_it_mkProd_or_LetIn subst_instance_context_length Nat.add_0_r in htc.
-  rewrite subst_instance_constr_mkApps subst_mkApps subst_instance_context_length in htc.
-  rewrite subst_inds_concl_head in htc.
-  ++ red in isdecl. destruct isdecl.
-    destruct H as [_ H]. now eapply nth_error_Some_length in H.
-  ++ rewrite -it_mkProd_or_LetIn_app in htc.
-     eapply mkApps_ind_typing_spine in htc; intuition auto.
- 
-      rewrite it_mkProd_or_LetIn_app.
-      right. unfold type_of_constructor in vty.
-      rewrite cshape_eq in vty. move: vty.
-      rewrite !subst_instance_constr_it_mkProd_or_LetIn.
-      rewrite !subst_it_mkProd_or_LetIn subst_instance_context_length Nat.add_0_r.
-      rewrite subst_instance_constr_mkApps subst_mkApps subst_instance_context_length.
-      rewrite subst_inds_concl_head. all:simpl; auto.
-      destruct isdecl as [[? oni] onc]. now eapply nth_error_Some_length in oni.
-  + right; apply vty.
-Qed. *)
+  induction Δ. simpl. 
+  intros _. exists Universe.type0m. exact I.
+  intros H; depelim H. red in l.
+  destruct l as [u Hu].
+  destruct (IHΔ H) as [s Hs].
+  exists (Universe.sup u s).
+  constructor.
+Admitted.
 
 Lemma sr_red1 {cf:checker_flags} : env_prop SR_red1.
 Proof.
@@ -1063,11 +1283,15 @@ Proof.
     eapply typing_subst_instance_decl with (Γ0:=[]); tea.
 
   - (* iota reduction *)
+    subst npar.
     clear forall_u forall_u0 X X0.
     unfold iota_red. rename args into iargs. rename args0 into cargs.
+    pose proof typec as typec'.
     eapply inversion_mkApps in typec as [A [U [tyc [tyargs tycum]]]]; auto.
     eapply (inversion_Construct Σ wfΣ) in tyc as [mdecl' [idecl' [cdecl' [wfl [declc [Hu tyc]]]]]].
-    destruct (on_declared_constructor wfΣ declc) as [[onmind onind] [csort [_ onc]]].
+    eapply Construct_Ind_ind_eq in typec'; eauto.
+    destruct typec' as [cs [onc cty]].
+    destruct (on_declared_constructor wfΣ declc) as [[onmind onind] [csort [_ _]]].
     destruct declc as [[declmi decli] declc].
     destruct isdecl as [declmi' decli'].
     red in declmi', declmi. rewrite declmi' in declmi. noconf declmi.
@@ -1090,21 +1314,95 @@ Proof.
     destruct brtys as [-> ->].
     eapply type_mkApps. eauto.
     set iargs' := @cshape_args _ _  _  _  _ onc.2.π1.
-    assert (#|cargs| = npar + #|iargs'|). admit.
+    destruct cty as [[[[_ equ] eqargs] argslen] [parsubst' [argsubst' [[[[Hpars Hargs] subpars] subargs] ?]]]].
+    assert(leq:Σ ;;; Γ |- (it_mkProd_or_LetIn
+    (subst_context parsubst 0
+       (subst_context (inds (inductive_mind ind) u (ind_bodies mdecl))
+          #|ind_params mdecl| (map_context (subst_instance_constr u) iargs')))
+    (mkApps ((lift0 #|iargs'|) p)
+       (map
+          (fun x : term =>
+           subst parsubst #|iargs'|
+             (subst (inds (inductive_mind ind) u (ind_bodies mdecl))
+                (#|iargs'| + #|ind_params mdecl|) (subst_instance_constr u x)))
+          (cshape_indices onc.2.π1) ++
+        [mkApps (tConstruct ind c0 u)
+           (map (lift0 #|iargs'|) (firstn (PCUICAst.ind_npars mdecl) iargs) ++
+            to_extended_list 
+              (subst_context parsubst 0
+              (subst_context (inds (inductive_mind ind) u (ind_bodies mdecl))
+                 #|ind_params mdecl| (map_context (subst_instance_constr u) iargs'))))])))
+           <=
+    (it_mkProd_or_LetIn
+     (subst_context parsubst' 0
+        (subst_context (inds (inductive_mind ind) u1 (ind_bodies mdecl))
+           #|ind_params mdecl| (map_context (subst_instance_constr u1) iargs')))
+     (mkApps ((lift0 #|iargs'|) p)
+        (map
+           (fun x : term =>
+            subst parsubst' #|iargs'|
+              (subst (inds (inductive_mind ind) u1 (ind_bodies mdecl))
+                 (#|iargs'| + #|ind_params mdecl|) (subst_instance_constr u1 x)))
+           (cshape_indices onc.2.π1) ++
+         [mkApps (tConstruct ind c0 u1) (* wrong *)
+            (map (lift0 #|iargs'|) (firstn (PCUICAst.ind_npars mdecl) cargs) ++
+             to_extended_list 
+             (subst_context parsubst' 0
+             (subst_context (inds (inductive_mind ind) u1 (ind_bodies mdecl))
+                #|ind_params mdecl| (map_context (subst_instance_constr u1) iargs'))))])))).
+    constructor. admit.
+    unshelve eapply typing_spine_strengthen. 4:eapply leq. all:auto.
+    clear leq.
+    set(cindices := map
+    (fun x : term =>
+     subst parsubst #|cshape_args onc.2.π1|
+       (subst (inds (inductive_mind ind) u (ind_bodies mdecl))
+          (#|cshape_args onc.2.π1| + #|ind_params mdecl|)
+          (subst_instance_constr u x)))
+    (cshape_indices onc.2.π1)) in *.
+    eapply (typing_spine_weaken_concl (S:=
+      (mkApps p (map (subst0 argsubst') cindices ++ [mkApps (tConstruct ind c0 u1) cargs])))).
+    auto.
+    2:{ eapply conv_alt_cumul; auto.
+        eapply conv_mkApps.
     eapply typing_spine_it_mkProd_or_LetIn_close_eq; eauto.
-
-
-    induction iargs'.
-    + simpl. cbn. unfold subst_context. simpl.
-      rewrite lift0_id. simpl in H. rewrite Nat.add_0_r in H.
-      rewrite -H skipn_all. simpl. econstructor.
+    * eapply make_context_subst_spec_inv. rewrite List.rev_involutive.
+      eauto.
+    * rewrite skipn_length.
+      pose proof (onNpars _ _ _ _ onmind).
+      pose proof (context_assumptions_length_bound (ind_params mdecl)).
+      lia.
+      rewrite !context_assumptions_subst subst_instance_context_assumptions /iargs'. lia.
+    * right.
+      destruct s as [x Hx].
+      eexists.
+      eapply type_it_mkProd_or_LetIn; eauto.
+      eapply type_mkApps.
+      eapply weakening_gen in typep. auto. eapply typep. all:eauto.
+      now autorewrite with len. 
+      eapply type_local_ctx_wf_local in Hx; auto.
       admit.
-      
 
-      rewrite map_app /=.
-    
-    
-
+    * rewrite subst_mkApps.
+      pose proof (context_subst_length _ _ _ Hargs).
+      rewrite !subst_context_length subst_instance_context_length in H.
+      rewrite -{1}(Nat.add_0_r #|iargs'|) (simpl_subst' _ _ 0 _ #|iargs'|) /iargs'; try lia.
+      rewrite lift0_id.
+      f_equal.
+      rewrite map_app /= subst_mkApps. f_equal.
+      ** admit.
+      ** f_equal. simpl. f_equal.
+        rewrite map_app -{1}(firstn_skipn (ind_npars mdecl) cargs).  
+        f_equal.
+        rewrite map_map_compose.
+        now rewrite H map_subst_lift_id.
+        unfold to_extended_list.
+        erewrite subst_to_extended_list_k. rewrite map_id_f. intros x; apply lift0_id.
+        reflexivity.
+        apply make_context_subst_spec_inv. rewrite List.rev_involutive. auto.
+      * reflexivity.
+      * admit. 
+  
   - (* Case congruence *) admit.
   - (* Case congruence *) admit.
   - (* Case congruence *) admit.
