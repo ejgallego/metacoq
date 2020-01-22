@@ -268,9 +268,11 @@ Module DeclarationTyping (T : Term) (E : EnvironmentSig T)
 
     Definition on_type Σ Γ T := P Σ Γ T None.
 
-    Record constructor_shape mdecl i idecl ctype :=
+    Record constructor_shape mdecl i idecl ctype cargs :=
       { cshape_args : context;
         (* Arguments (with lets) *)
+        cshape_args_length : context_assumptions cshape_args = cargs;
+        (* Real (non-let) arguments bound by the constructor *)
 
         cshape_concl_head := tRel (#|mdecl.(ind_bodies)|
                                   - S i
@@ -291,17 +293,17 @@ Module DeclarationTyping (T : Term) (E : EnvironmentSig T)
           arguments ending with a reference to the inductive applied to the
           (non-lets) parameters and arguments *)
       }.
-    Arguments cshape_args {mdecl i idecl ctype}.
+    Arguments cshape_args {mdecl i idecl ctype cargs}.
 
     Open Scope type_scope.
 
     Definition on_constructor Σ mdecl i idecl cdecl ind_ctor_sort :=
       (* cdecl.1 fresh ?? *)
-      (* cdecl.2.2 ?? *)
       let ctype := cdecl.1.2 in
+      let cargs := cdecl.2 in
       (* FIXME: there is some redundancy with the type_local_ctx *)
       on_type Σ (arities_context mdecl.(ind_bodies)) ctype *
-      { cs : constructor_shape mdecl i idecl ctype &
+      { cs : constructor_shape mdecl i idecl ctype cargs &
             type_local_ctx Σ
                       (arities_context mdecl.(ind_bodies) ,,, mdecl.(ind_params))
                       cs.(cshape_args) ind_ctor_sort }.
@@ -476,7 +478,7 @@ Module DeclarationTyping (T : Term) (E : EnvironmentSig T)
 
   End GlobalMaps.
 
-  Arguments cshape_args {mdecl i idecl ctype}.
+  Arguments cshape_args {mdecl i idecl ctype cargs}.
   Arguments ind_indices {_ P Σ mind mdecl i idecl}.
   Arguments ind_sort {_ P Σ mind mdecl i idecl}.
   Arguments ind_arity_eq {_ P Σ mind mdecl i idecl}.

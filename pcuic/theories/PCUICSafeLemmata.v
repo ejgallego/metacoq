@@ -1559,24 +1559,6 @@ End Lemmata.
 
 From MetaCoq.Checker Require Import uGraph.
 
-Lemma subst_inds_concl_head ind u mdecl (arity : context) :
-  let head := tRel (#|ind_bodies mdecl| - S (inductive_ind ind) + #|ind_params mdecl| + #|arity|) in
-  let s := (inds (inductive_mind ind) u (ind_bodies mdecl)) in
-  inductive_ind ind < #|ind_bodies mdecl| ->
-  subst s (#|arity| + #|ind_params mdecl|)
-        (subst_instance_constr u head)
-  = tInd ind u.
-Proof.
-  intros.
-  subst head. simpl subst_instance_constr.
-  rewrite (subst_rel_eq _ _ (#|ind_bodies mdecl| - S (inductive_ind ind)) (tInd ind u)) //; try lia.
-  subst s. rewrite inds_spec rev_mapi nth_error_mapi /=.
-  elim nth_error_spec. 
-  + intros. simpl.
-    f_equal. destruct ind; simpl. f_equal. f_equal. simpl in H. lia.
-  + rewrite List.rev_length. lia.
-Qed.
-
 Lemma declared_constructor_valid_ty {cf:checker_flags} Σ Γ mdecl idecl i n cdecl u :
   wf Σ.1 ->
   wf_local Σ Γ ->
@@ -2052,7 +2034,6 @@ destruct h as [uni [mdecl [idecl [pdecl [args' [? [hc [? ?]]]]]]]].
 apply Construct_Ind_ind_eq in hc; eauto.
 Qed.
 
-
 Lemma isWAT_tLetIn {cf:checker_flags} {Σ : global_env_ext} (HΣ' : wf Σ)
       {Γ} (HΓ : wf_local Σ Γ) {na t A B}
   : isWfArity_or_Type Σ Γ (tLetIn na t A B)
@@ -2151,6 +2132,7 @@ Proof.
     ++ auto.
 Qed.
 
+∃
 Lemma typing_spine_it_mkProd_or_LetIn {cf:checker_flags} Σ Γ Δ T args s args' T' : 
   wf Σ.1 ->
   make_context_subst (List.rev Δ) args [] = Some s -> 

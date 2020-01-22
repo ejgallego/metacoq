@@ -278,8 +278,7 @@ Fixpoint string_of_conv_error Σ (e : ConversionError) : string :=
       "\ndo not have the same head when comparing for " ++
       string_of_conv_pb leq
   end.
-
-
+Λ
 Definition string_of_type_error Σ (e : type_error) : string :=
   match e with
   | UnboundRel n => "Unbound rel " ++ string_of_nat n
