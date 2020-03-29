@@ -277,10 +277,10 @@ struct
         let (dp, nm) = Quoted.split_name s in
         (try
            match Nametab.locate (Libnames.make_qualid dp nm) with
-           | Globnames.ConstRef c ->  CErrors.user_err (str "this not an inductive constant. use tConst instead of tInd : " ++ str s)
-           | Globnames.IndRef i -> (fst i, unquote_nat  num)
-           | Globnames.VarRef _ -> CErrors.user_err (str "the constant is a variable. use tVar : " ++ str s)
-           | Globnames.ConstructRef _ -> CErrors.user_err (str "the constant is a consructor. use tConstructor : " ++ str s)
+           | GlobRef.ConstRef c ->  CErrors.user_err (str "this not an inductive constant. use tConst instead of tInd : " ++ str s)
+           | GlobRef.IndRef i -> (fst i, unquote_nat  num)
+           | GlobRef.VarRef _ -> CErrors.user_err (str "the constant is a variable. use tVar : " ++ str s)
+           | GlobRef.ConstructRef _ -> CErrors.user_err (str "the constant is a consructor. use tConstructor : " ++ str s)
          with
            Not_found ->   CErrors.user_err (str "Constant not found : " ++ str s))
       | _ -> assert false
