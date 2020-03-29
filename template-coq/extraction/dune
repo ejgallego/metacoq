@@ -1,0 +1,62 @@
+; (coq.extraction
+;  (prelude Extraction)
+;  (extracted_modules
+;    All_Forall
+;    Ascii
+;    Ast0
+;    AstUtils
+;    BasicAst
+;    Basics
+;    BinInt
+;    BinNat
+;    BinNums
+;    BinPosDef
+;    BinPos
+;    Bool
+;    Byte
+;    Common0
+;    Compare_dec
+;    config0
+;    CRelationClasses
+;    Datatypes
+;    Decimal
+;    Environment
+;    Equalities
+;    Equality0
+;    Extractable
+;    Induction
+;    LiftSubst
+;    List0
+;    Logic0
+;    MCCompare
+;    MCList
+;    MCOption
+;    MCProd
+;    MCRelations
+;    MCString
+;    MSetDecide
+;    MSetFacts
+;    MSetInterface
+;    MSetList
+;    MSetProperties
+;    Nat0
+;    OrderedType0
+;    OrdersFacts
+;    OrdersLists
+;    Orders
+;    OrdersTac
+;    PeanoNat
+;    Pretty
+;    Specif
+;    String0
+;    Universes0
+;    UnivSubst0
+;  )
+;  (theories MetaCoq.Template))
+
+(library
+ (name metacoq_template_plugin)
+ (public_name coq-metacoq-template.extracted)
+ (wrapped false)
+ (flags :standard -w -9-32-33-34-39 -alert -deprecated)
+ (modules :standard))

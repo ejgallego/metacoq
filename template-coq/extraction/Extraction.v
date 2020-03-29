@@ -21,7 +21,7 @@ Extraction Blacklist config uGraph Universes Ast String List Nat Int
            UnivSubst Typing Checker Retyping OrderedType Logic Common Equality UnivSubst.
 Set Warnings "-extraction-opaque-accessed".
 
-Cd "gen-src".
+Cd "template-coq/extraction".
 
 Require Import MetaCoq.Template.TemplateMonad.Extractable.
 From MetaCoq.Template Require Import config Induction LiftSubst UnivSubst Pretty.
@@ -34,4 +34,4 @@ Extraction Library UnivSubst.
 Extraction Library Pretty.
 Extraction Library config.
 
-Cd "..".
+Cd "../..".

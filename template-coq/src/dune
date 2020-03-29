@@ -1,0 +1,8 @@
+(library
+ (name template_coq)
+ (public_name coq-metacoq-template.plugin)
+ (wrapped false)
+ (flags :standard -rectypes -w -9-26-27-32-33-39)
+ (libraries coq.plugins.ltac metacoq_template_plugin))
+
+(coq.pp (modules g_template_coq))

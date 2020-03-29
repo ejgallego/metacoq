@@ -395,3 +395,5 @@ vs.mli
 *.v.timing
 time-of-build.log
 time-of-build-pretty.log
+
+_build

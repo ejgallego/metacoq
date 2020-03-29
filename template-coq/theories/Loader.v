@@ -3,6 +3,7 @@ From MetaCoq Require Template.TemplateMonad.Core
   Template.BasicAst Template.Ast
   Template.Constants.
 
+Declare ML Module "metacoq_template_plugin".
 Declare ML Module "template_coq".
 
 (* note(gmm): i'm not exactly sure where this should go. *)
